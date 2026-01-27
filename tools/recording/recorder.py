@@ -9,6 +9,14 @@ import json
 import sys
 from pynput import mouse, keyboard
 
+# --- Windows DPI Awareness Fix ---
+if sys.platform == 'win32':
+    try:
+        import ctypes
+        ctypes.windll.shcore.SetProcessDpiAwareness(1) # PROCESS_SYSTEM_DPI_AWARE
+    except Exception:
+        pass
+
 class ProGuiRecorder:
     def __init__(self, output_dir=None, audio_device=None):
         # 默认保存到当前目录下的 recordings 文件夹，或者用户指定的目录
