@@ -1,6 +1,6 @@
 ---
 name: jianying-editor
-description: 使用 pyJianYingDraft 库自动化创建、编辑和管理剪映 (JianYing) 视频草稿。支持多轨道、动画、特效、关键帧、模板替换、自动导出以及基于操作录制的智能变焦(Smart Zoom)功能。
+description: 使用 pyJianYingDraft 库自动化创建、编辑和管理剪映 (JianYing) 视频草稿。支持多轨道、动画、特效、关键帧、模板替换、自动导出以及启动录屏工具。
 ---
 
 # JianYing Editor Skill
