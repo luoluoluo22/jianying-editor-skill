@@ -332,19 +332,33 @@ class JyProject:
             with open(events_json_path, 'r', encoding='utf-8') as f:
                 events = json.load(f)
             
-            click_events = [e for e in events if e['type'] == 'click']
-            print(f"🎯 Applying {len(click_events)} zoom points (Fallback Mode)...")
+            # 权重事件：点击和按键都视为有效触发点
+            trigger_events = []
+            last_x, last_y = 0.5, 0.5 # 默认中心
+            for e in events:
+                # 持续跟踪最后已知的鼠标位置
+                if 'x' in e and 'y' in e:
+                    last_x, last_y = e['x'], e['y']
+                
+                if e['type'] in ['click', 'keypress']:
+                    # 为按键事件补充当时已知的坐标，使其也能作为缩放中心
+                    if 'x' not in e:
+                        e['x'], e['y'] = last_x, last_y
+                    trigger_events.append(e)
+            
+            print(f"🎯 Applying {len(trigger_events)} zoom interest points (Fallback Mode)...")
             from pyJianYingDraft.keyframe import KeyframeProperty as KP
 
             grouped_events = []
-            if click_events:
-                current_group = [click_events[0]]
-                for i in range(1, len(click_events)):
-                    if (click_events[i]['time'] - click_events[i-1]['time']) <= 3.0:
-                        current_group.append(click_events[i])
+            if trigger_events:
+                current_group = [trigger_events[0]]
+                for i in range(1, len(trigger_events)):
+                    # 判断间隔是否在 3秒内，实现“每输入一次重新更新计时”
+                    if (trigger_events[i]['time'] - trigger_events[i-1]['time']) <= 3.0:
+                        current_group.append(trigger_events[i])
                     else:
                         grouped_events.append(current_group)
-                        current_group = [click_events[i]]
+                        current_group = [trigger_events[i]]
                 grouped_events.append(current_group)
 
             scale_val = float(zoom_scale) / 100.0
@@ -391,6 +405,20 @@ class JyProject:
                         video_segment.add_keyframe(KP.uniform_scale, t_curr, scale_val)
                         video_segment.add_keyframe(KP.position_x, t_curr, px)
                         video_segment.add_keyframe(KP.position_y, t_curr, py)
+
+                # 2.5 在最后一个动作后立即锁定保持状态
+                last_evt = group[-1]
+                t_last_action = int(last_evt['time'] * 1000000)
+                last_tx = (last_evt['x'] - 0.5) * 2
+                last_ty = (0.5 - last_evt['y']) * 2
+                lpx_lock = -last_tx * scale_val
+                lpy_lock = -last_ty * scale_val
+                
+                # 在最后动作后 100ms 添加锁定关键帧，确保缩放值被明确固定
+                t_lock = t_last_action + 100000  # 100ms
+                video_segment.add_keyframe(KP.uniform_scale, t_lock, scale_val)
+                video_segment.add_keyframe(KP.position_x, t_lock, lpx_lock)
+                video_segment.add_keyframe(KP.position_y, t_lock, lpy_lock)
 
                 # 3. End Phase (Dynamic Hold)
                 last = group[-1]

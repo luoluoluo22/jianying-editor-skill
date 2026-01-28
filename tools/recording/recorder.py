@@ -33,7 +33,8 @@ class ProGuiRecorder:
         
         # UI Setup
         self.root = tk.Tk()
-        self.root.title("剪映 Skill 录屏助手 V3")
+        self.enable_zoom_record = tk.BooleanVar(value=True)
+        self.root.title("剪映录屏助手")
         self.root.attributes("-topmost", True)
         self.root.configure(bg="#2c3e50")
         
@@ -54,7 +55,14 @@ class ProGuiRecorder:
         
         self.start_btn = tk.Button(self.main_frame, text="🎬 开始录制", command=self.start_countdown, 
                                   bg="#2ecc71", fg="white", font=("Microsoft YaHei", 10, "bold"), width=25, height=2)
-        self.start_btn.pack(pady=10)
+        self.start_btn.pack(pady=5)
+
+        self.zoom_cb = tk.Checkbutton(self.main_frame, text="开启智能缩放记录 (鼠标/键盘)", 
+                                     variable=self.enable_zoom_record,
+                                     bg="#2c3e50", fg="#bdc3c7", selectcolor="#2c3e50",
+                                     activebackground="#2c3e50", activeforeground="white",
+                                     font=("Microsoft YaHei", 8))
+        self.zoom_cb.pack(pady=5)
 
         # --- 录制中简洁界面 (小圆点) ---
         self.mini_frame = tk.Frame(self.root, bg="#e74c3c", cursor="hand2")
@@ -113,7 +121,7 @@ class ProGuiRecorder:
         self.events_path = self.output_path.replace(".mp4", "_events.json")
 
     def on_click(self, x, y, button, pressed):
-        if self.is_recording and pressed:
+        if self.is_recording and pressed and self.enable_zoom_record.get():
             rel_time = time.time() - self.start_time
             self.events.append({
                 "type": "click",
@@ -123,7 +131,7 @@ class ProGuiRecorder:
             })
 
     def on_press(self, key):
-        if self.is_recording:
+        if self.is_recording and self.enable_zoom_record.get():
             rel_time = time.time() - self.start_time
             self.events.append({
                 "type": "keypress", "time": round(rel_time, 3)
@@ -167,7 +175,7 @@ class ProGuiRecorder:
         # 1. 仅在录制期间
         # 2. 距离上次记录时间 > 0.1s (10FPS采样)
         # 3. 距离上次坐标变化 > 阈值 (例如 5 像素)
-        if not self.is_recording:
+        if not self.is_recording or not self.enable_zoom_record.get():
             return
             
         now = time.time()
