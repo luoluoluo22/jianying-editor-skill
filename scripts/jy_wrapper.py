@@ -425,37 +425,13 @@ class JyProject:
                 video_segment.add_keyframe(KP.position_x, t_lock, lpx_lock)
                 video_segment.add_keyframe(KP.position_y, t_lock, lpy_lock)
 
-                # 3. End Phase (Dynamic Hold)
-                last = group[-1]
-                last_activity_time = last['time']
-                
-                # Try to parse moves from raw dict if available in fallback scope
-                move_events = [e for e in events if e.get('type') == 'move']
-                potential_moves = [m for m in move_events if m['time'] > last_activity_time]
-                
-                valid_post_moves = []
-                for m in potential_moves:
-                    if m['time'] - last_activity_time <= 3.0:
-                        last_activity_time = m['time']
-                        valid_post_moves.append(m)
-                    else:
-                        break
-                
-                # Just simplified processing for fallback (no smart follow, just hold extension)
-                # Or we can copy the logic exactly. Let's do simplified extension.
-                
-                # Calculate final hold time
-                t_hold_end = int((last_activity_time + 3.0) * 1000000)
-                
-                # Final position (based on last click, ignoring moves for simplified fallback)
-                last_tx = (last['x'] - 0.5) * 2
-                last_ty = (0.5 - last['y']) * 2
-                lpx = -last_tx * scale_val
-                lpy = -last_ty * scale_val
+                # 3. End Phase - 固定保持 3 秒后恢复
+                # 简化逻辑：不再受 move 事件影响，直接在最后点击后 3 秒开始恢复
+                t_hold_end = t_last_action + HOLD_US  # 3秒 = 3000000微秒
 
                 video_segment.add_keyframe(KP.uniform_scale, t_hold_end, scale_val)
-                video_segment.add_keyframe(KP.position_x, t_hold_end, lpx)
-                video_segment.add_keyframe(KP.position_y, t_hold_end, lpy)
+                video_segment.add_keyframe(KP.position_x, t_hold_end, lpx_lock)
+                video_segment.add_keyframe(KP.position_y, t_hold_end, lpy_lock)
 
                 t_restore = t_hold_end + ZOOM_OUT_US
                 video_segment.add_keyframe(KP.uniform_scale, t_restore, 1.0)
