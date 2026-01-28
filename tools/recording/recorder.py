@@ -235,8 +235,14 @@ class ProGuiRecorder:
         
         if self.process:
             try:
-                self.process.communicate(input=b'q\n', timeout=10)
-            except:
+                # 等待音频缓冲区刷新 (FFmpeg 音频编码有延迟)
+                time.sleep(0.5)
+                # 发送 'q' 让 FFmpeg 正常结束并写入尾部数据
+                self.process.stdin.write(b'q')
+                self.process.stdin.flush()
+                self.process.wait(timeout=15)
+            except Exception as e:
+                print(f"⚠️ FFmpeg 停止异常: {e}")
                 self.process.kill()
         
         try:
