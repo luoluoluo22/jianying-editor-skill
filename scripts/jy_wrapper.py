@@ -138,14 +138,26 @@ def _resolve_enum(enum_cls, name: str):
         real_key = mapping[name_lower]
         return getattr(enum_cls, real_key)
 
-    # 3. Synonym Lookup (中文 -> English Enum Key)
-    # 遍历字典，看 name 是否在 values 列表中，或者 values 列表中的词是否在 name 中
+    # 3. Synonym Lookup (双向映射: 中文<->英文)
+    # 情况A: 输入的是中文同义词 (如 "打字机") -> 找英文 Key (如果有) 或者其他中文标准名
+    # 情况B: 输入的是英文 Key (如 "typewriter") -> 找 Enum 里实际存在的中文属性名 (如 "复古打字机")
+    
     for key, synonyms in EFFECT_SYNONYMS.items():
-        key_lower = key.lower()
-        if key_lower in mapping: # 确保 Enum 里真有这个 Key
+        # 检查是否命中字典的 Key (英文)
+        if name_lower == key.lower():
+            # 尝试在 synonyms 列表里找到一个在 Enum 里存在的词
+            for candidate in synonyms:
+                if candidate in mapping: # Enum 里有 "复古打字机"
+                    real_key = mapping[candidate]
+                    print(f"ℹ️ Map EN->CN: '{name}' -> '{real_key}'")
+                    return getattr(enum_cls, real_key)
+        
+        # 检查是否命中字典的 Value (中文同义词)
+        # 如果 Enum 里真的有英文 Key (design by normal people)，那走这里
+        if key.lower() in mapping:
             for syn in synonyms:
                 if syn in name_lower or name_lower in syn:
-                    real_key = mapping[key_lower]
+                    real_key = mapping[key.lower()]
                     print(f"ℹ️ Synonym Match: '{name}' -> '{real_key}'")
                     return getattr(enum_cls, real_key)
     
