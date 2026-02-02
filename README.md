@@ -38,7 +38,11 @@ git clone https://github.com/luoluoluo22/jianying-editor-skill.git skills/jianyi
 > "请使用 jianying-editor 帮我创建一个名为 'MyDemo' 的剪映草稿，导入 output.mp4，并在开场添加一个标题。"
 
 
-### 3. 🗣️ 试试这样问 AI (示例)
+### 3. 查看示例代码 (Examples)
+如果你是第一次使用，建议直接参考仓库中的标准示例：
+- **[examples/simple_clip_demo.py](examples/simple_clip_demo.py)**: 包含初始化、导入视频、加音乐、加字幕的完整流程。让 Agent 学习这个文件是上手的最快方式。
+
+### 4. 🗣️ 试试这样问 AI (示例)
 
 **场景一：制作软件教程**
 > "帮我启动录屏工具"
