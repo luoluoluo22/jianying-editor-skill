@@ -35,22 +35,46 @@ from jy_wrapper import JyProject
 
 ### 2. 标准工作流
 ```python
-# 初始化 (自动探测路径 + 自动处理同名覆盖)
+# 初始化 (自动探测路径 + 自动处理同名覆盖 + 自动更新首页索引)
 project = JyProject("MyAutoVideo")
 
-# 添加媒体 (智能分流：无需指定 track_type，自动识别视频/音频后缀)
+# A. 添加常规媒体 (自动识别后缀)
 project.add_media_safe(r"C:\video.mp4", start_time="0s", duration="5s")
-project.add_media_safe(r"C:\bgm.mp3", start_time="0s", track_name="BGM_Track")
 
-# 添加文本 (扁平化参数，支持自动分层防止重叠)
-# 注意：位置控制请使用 transform_y (0.0=中心, -1.0=底部, 1.0=顶部) 而非 position
-project.add_text_simple("Hello Antigravity", start_time="1s", duration="3s", 
-                        font_size=20.0, color_rgb=(1.0, 0.0, 0.0), 
-                        transform_y=-0.8, anim_in="复古打字机")
+# B. (NEW) 一键导入 Web 动效 (自动化全链路: HTML -> WebM -> Import)
+# 依赖: Playwright
+project.add_web_asset_safe(r"C:\vfx.html", start_time="5s", duration="3s")
 
-# 保存 (内置自动错误检查与部分自愈)
+# C. (ADVANCED) 直接生成并导入 Web 代码动效
+# 这种模式下，Agent 直接将生成的 HTML 字符串传递给封装方法
+project.add_web_code_vfx("""
+    <div id='box' style='width:200px;height:200px;background:red'></div>
+    <script>
+        // 关键协议：动画结束后必须设置此变量，录制器才会停止
+        gsap.to('#box', {x: 500, duration: 2, onComplete: () => {
+            window.animationFinished = true; 
+        }});
+    </script>
+""", start_time="0s", duration="3s")
+
+# 保存 (同时会强制刷新剪映首页列表)
 project.save()
 ```
+
+## 核心能力：Web 动画即素材 (Web-to-Video)
+本 Skill 允许 Agent 像开发前端页面一样为视频创作素材。
+### 动画契约 (Animation Contract)
+为了确保录制成功，生成的 HTML 代码必须遵循以下协议：
+1.  **静默退出**：在动画逻辑结束时（如 GSAP 的 `onComplete` 或 `setTimeout` 后），必须执行 `window.animationFinished = true;`。
+2.  **全屏适配**：默认录制分辨率为 1920x1080，Wrapper 会自动注入透明背景及 `margin:0` 样式。
+3.  **资源引用**：可以使用 CDN 上的第三方库（如 GSAP, Three.js, Canvas-confetti）。
+
+### 推荐思维流 (思维链)
+当用户要求“烟花效果”或“高级标题”时：
+1.  **判断**：剪映内置素材无法满足需求 -> 决定使用 Web VFX。
+2.  **构思**：使用 `canvas-confetti` 库。
+3.  **编写**：生成包含库引用、动画逻辑和 `animationFinished` 信号的 HTML 字符串。
+4.  **执行**：调用 `project.add_web_code_vfx(html_code, ...)`。
 
 ## 核心能力：生成式剪辑 (Generative Editing)
 本 Skill 不依赖死板的模板，而是要求 Agent 像一个**人类剪辑师**一样思考。当用户提出模糊需求（如“做一个赛博朋克风格的视频”）时，请遵循以下**思维链 (Chain of Thought)**：

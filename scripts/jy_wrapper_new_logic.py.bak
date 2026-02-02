@@ -6,13 +6,12 @@ JianYing Editor Skill - High Level Wrapper (Bootstrap)
 """
 
 import os
+import uuid
 import sys
 import shutil
 import warnings
 import argparse
 import difflib
-import time
-import uuid
 from typing import Union
 
 # Force UTF-8 output for Windows consoles to support Emojis
@@ -47,13 +46,6 @@ except ImportError:
         from pyJianYingDraft import VideoSceneEffectType, TransitionType, IntroType, OutroType
     else:
         print(f"⚠️ Warning: pyJianYingDraft module not found in standard locations.")
-
-# --- 2. 注入录制器 (Internal) ---
-try:
-    from web_recorder import record_web_animation
-    HAS_RECORDER = True
-except ImportError:
-    HAS_RECORDER = False
 
 # --- 2. 路径自动探测 ---
 def get_default_drafts_root() -> str:
@@ -388,63 +380,6 @@ class JyProject:
 
         except Exception as e:
             print(f"⚠️ Failed to update root_meta_info: {e}")
-
-    def add_web_asset_safe(self, html_path: str, start_time: Union[str, int], duration: Union[str, int] = "5s", 
-                           track_name: str = "WebVfxTrack", **kwargs):
-        """
-        [封装核心]: 将一个 HTML 动效文件录制并导入剪映。
-        
-        Args:
-            html_path: HTML 文件的绝对路径。
-            start_time: 在时间轴上的起始位置。
-            duration: 持续时长。
-            track_name: 目标轨道名称。
-        """
-        if not HAS_RECORDER:
-            print("❌ Cannot add web asset: 'web_recorder' module or its dependencies (playwright) are missing.")
-            return None
-
-        if not os.path.exists(html_path):
-            print(f"❌ HTML file not found: {html_path}")
-            return None
-
-        # 1. 生成临时录制路径 (在草稿目录下的 temp 文件夹)
-        temp_dir = os.path.join(self.root, self.name, "temp_assets")
-        os.makedirs(temp_dir, exist_ok=True)
-        video_output = os.path.join(temp_dir, f"web_vfx_{int(time.time())}.webm")
-
-        # 2. 调用录制流程
-        print(f"🎬 Recording web asset: {os.path.basename(html_path)} ...")
-        success = record_web_animation(html_path, video_output, max_duration=tim(duration)/1000000 + 5)
-        
-        if not success:
-            print("⚠️ Web recording failed.")
-            return None
-
-        # 3. 导入素材 (关键：WebM 必须显式传递 duration)
-        print(f"📥 Importing recorded video to jianying...")
-        return self.add_media_safe(video_output, start_time, duration, track_name=track_name)
-
-    def add_web_code_vfx(self, html_code: str, start_time: Union[str, int], duration: Union[str, int] = "5s", 
-                        track_name: str = "WebVfxTrack", **kwargs):
-        """
-        [顶级封装]: 直接传入 HTML 代码，自动保存并录制导入。
-        Agent 只需生成网页代码，剩下的交给此方法。
-        """
-        # 自动创建临时 HTML 文件
-        temp_dir = os.path.join(self.root, self.name, "temp_assets")
-        os.makedirs(temp_dir, exist_ok=True)
-        temp_html_path = os.path.join(temp_dir, f"vfx_{uuid.uuid4().hex[:8]}.html")
-        
-        # 确保代码中包含基础样式以适配 1080P
-        if "margin: 0" not in html_code:
-            html_code = html_code.replace("<style>", "<style>body{margin:0;overflow:hidden;background:transparent;}")
-            
-        with open(temp_html_path, 'w', encoding='utf-8') as f:
-            f.write(html_code)
-            
-        print(f"📝 Generated VFX HTML: {temp_html_path}")
-        return self.add_web_asset_safe(temp_html_path, start_time, duration, track_name=track_name)
 
     def add_media_safe(self, media_path: str, start_time: Union[str, int], duration: Union[str, int] = None, 
                        track_name: str = None, source_start: Union[str, int] = 0, **kwargs):
