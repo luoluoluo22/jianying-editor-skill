@@ -11,12 +11,28 @@
 
 ### 1. 安装 Skill (Install)
 
-# 推荐安装到根目录的 skills 文件夹
+请根据您使用的 AI 编辑器 (IDE)，选择对应的安装命令，以确保 Skill 能被自动识别：
+
+**🤖 Antigravity / Gemini Code Assist:**
 ```bash
-git clone https://github.com/luoluoluo22/jianying-editor-skill.git skills/jianying-editor
+git clone https://github.com/luoluoluo22/jianying-editor-skill.git .agent/skills/jianying-editor
 ```
 
-### 2. 在 AI 对话中使用
+**🚀 Trae IDE:**
+```bash
+git clone https://github.com/luoluoluo22/jianying-editor-skill.git .trae/skills/jianying-editor
+```
+
+**🧠 Claude Code:**
+```bash
+git clone https://github.com/luoluoluo22/jianying-editor-skill.git .claude/skills/jianying-editor
+```
+
+**💻 Cursor / VSCode / 通用:**
+```bash
+# 通用方式：安装到根目录 include 列表
+git clone https://github.com/luoluoluo22/jianying-editor-skill.git skills/jianying-editor
+```
 安装完成后，您可以在任何 AI 助手的对话框中直接下达指令（无需特定符号）：
 
 > "请使用 jianying-editor 帮我创建一个名为 'MyDemo' 的剪映草稿，导入 output.mp4，并在开场添加一个标题。"
