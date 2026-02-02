@@ -1,40 +1,26 @@
 # JianYing Editor Skill for Antigravity
 ![封面图](assets/readme_assets/cover.png)
 
-这是一个为 Google Antigravity 设计的专业级 Skill，旨在通过 AI 代理全自动生成、编辑和导出剪映（JianYing/CapCut 中国版）视频草稿。
+这是一个为 **AI Agent (Trae, Antigravity, Claude Code, Cursor)** 设计的通用专业级 Skill。它旨在赋予 AI“手眼”，使其能通过 Python 代码全自动生成、编辑和导出剪映（JianYing/CapCut 中国版）视频草稿。
+
+不仅支持基础剪辑，更支持**网页动效生成 (Web-to-Video)** 和 **生成式 VFX**。
+
+---
 
 ## 🚀 快速开始 (Quick Start)
 
 ### 1. 安装 Skill (Install)
 
-请根据您使用的 AI 编辑器 (IDE)，选择对应的安装命令，以确保 Skill 能被自动识别：
-
-**🤖 Antigravity / Gemini Code Assist:**
-```bash
-git clone https://github.com/luoluoluo22/jianying-editor-skill.git .agent/skills/jianying-editor
-```
-
-**🚀 Trae IDE:**
-```bash
-git clone https://github.com/luoluoluo22/jianying-editor-skill.git .trae/skills/jianying-editor
-```
-
-**🧠 Claude Code:**
-```bash
-git clone https://github.com/luoluoluo22/jianying-editor-skill.git .claude/skills/jianying-editor
-```
-
-**💻 Cursor / VSCode / 通用:**
-```bash
 # 推荐安装到根目录的 skills 文件夹
+```bash
 git clone https://github.com/luoluoluo22/jianying-editor-skill.git skills/jianying-editor
 ```
 
 ### 2. 在 AI 对话中使用
-安装完成后，直接对您的 AI 助手说：
-```text
-@jianying-editor 帮我用 assets 里的视频创建一个自动剪辑项目
-```
+安装完成后，您可以在任何 AI 助手的对话框中直接下达指令（无需特定符号）：
+
+> "请使用 jianying-editor 帮我创建一个名为 'MyDemo' 的剪映草稿，导入 output.mp4，并在开场添加一个标题。"
+
 
 ### 3. 🗣️ 试试这样问 AI (示例)
 
