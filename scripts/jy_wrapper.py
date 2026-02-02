@@ -149,7 +149,7 @@ class JyProject:
     高层封装类，提供容错、自动计算和简化的 API。
     """
     
-    def __init__(self, name: str, width: int = 1920, height: int = 1080, 
+    def __init__(self, project_name: str, width: int = 1920, height: int = 1080, 
                  drafts_root: str = None, overwrite: bool = True):
         self.root = drafts_root or get_default_drafts_root()
         if not os.path.exists(self.root):
@@ -161,20 +161,20 @@ class JyProject:
         print(f"📂 Project Root: {self.root}")
         
         self.df = draft.DraftFolder(self.root)
-        self.name = name
+        self.name = project_name
         
         # 支持打开现有项目或创建新项目
-        has_draft = self.df.has_draft(name)
+        has_draft = self.df.has_draft(project_name)
         
         # 损坏检测与自愈 (Self-Healing)
         if has_draft:
-            draft_path = os.path.join(self.root, name)
+            draft_path = os.path.join(self.root, project_name)
             content_path = os.path.join(draft_path, "draft_content.json")
             meta_path = os.path.join(draft_path, "draft_meta_info.json")
             
             # 如果缺少关键文件，视为损坏
             if not os.path.exists(content_path) or not os.path.exists(meta_path):
-                print(f"⚠️ Corrupted draft detected (missing json): {name}")
+                print(f"⚠️ Corrupted draft detected (missing json): {project_name}")
                 print(f"🧹 Auto-healing: Removing corrupted folder...")
                 try:
                     shutil.rmtree(draft_path, ignore_errors=True)
@@ -186,15 +186,15 @@ class JyProject:
                     pass
 
         if has_draft and not overwrite:
-            print(f"📖 Loading existing project: {name}")
+            print(f"📖 Loading existing project: {project_name}")
             try:
-                self.script = self.df.load_template(name)
+                self.script = self.df.load_template(project_name)
             except Exception as e:
                 print(f"❌ Load failed ({e}), forcing recreate...")
-                self.script = self.df.create_draft(name, width, height, allow_replace=True)
+                self.script = self.df.create_draft(project_name, width, height, allow_replace=True)
         else:
-            print(f"🆕 Creating new project: {name}")
-            self.script = self.df.create_draft(name, width, height, allow_replace=overwrite)
+            print(f"🆕 Creating new project: {project_name}")
+            self.script = self.df.create_draft(project_name, width, height, allow_replace=overwrite)
 
     def save(self):
         """
