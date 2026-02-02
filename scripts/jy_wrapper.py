@@ -619,7 +619,19 @@ class JyProject:
         
         if anim_in:
             anim = _resolve_enum(TextIntro, anim_in)
-            if anim: seg.add_animation(anim)
+            if anim: 
+                seg.add_animation(anim)
+            else:
+                # Fallback: 支持直接传入效果 ID (Raw ID Support)
+                # 当 Agent 从 asset_search 拿到一个未知 ID 时，允许透传
+                print(f"ℹ️ Enum lookup failed. Using raw animation ID: {anim_in}")
+                try:
+                    # 构造一个符合底层接口的伪对象 (Duck Typing)
+                    from types import SimpleNamespace
+                    raw_anim = SimpleNamespace(value=anim_in)
+                    seg.add_animation(raw_anim)
+                except Exception as e:
+                    print(f"⚠️ Failed to apply raw animation ID: {e}")
         
         # --- 2. 自动分层 (Auto-Layering) ---
         # 尝试添加到指定轨道，如果失败则尝试寻找/创建空闲轨道
