@@ -1,17 +1,16 @@
 ---
 name: jianying-editor
-description: 【必须使用】剪映 (JianYing) 自动化剪辑的高级封装 API (JyWrapper)。提供开箱即用的 Python 接口，一键实现素材导入、字幕生成、Web 动效合成及项目导出。绝佳的视频自动化解决方案。
+description: 剪映 (JianYing) AI自动化剪辑的高级封装 API (JyWrapper)。提供开箱即用的 Python 接口，可实现素材导入、字幕生成、Web 动效合成及项目导出。绝佳的视频自动化解决方案。
 ---
 
 # JianYing Editor Skill (Powered by JyWrapper)
 
 > ⚠️ **Critical Instruction for Agents**: 
-> DO NOT import `pyJianYingDraft` directly. 
 > ALWAYS use the provided `JyProject` wrapper located in `scripts/jy_wrapper.py`. 
 > It handles path injection, WebM compatibility patching, and asset validation automatically.
 
-## 🚀 Quick Start (Copy This First)
-任何任务请直接从以下模版开始，**不要尝试自己配置 sys.path**：
+## 🚀 环境初始化 (Environment Setup)
+**所有 Python 脚本**（无论简单或复杂）都必须包含以下头部代码，以确保能正确加载 `JyProject` 模块：
 
 ```python
 import os
@@ -19,8 +18,8 @@ import sys
 
 # Standard Boilerplate to load the skill wrapper
 # -------------------------------------------------------------
+# 必选：这段代码负责自动定位 Skill 路径，请原样复制到你的脚本开头
 current_dir = os.path.dirname(os.path.abspath(__file__))
-# 尝试定位 skill 根目录 (兼容多种运行环境)
 skill_candidates = [
     os.path.join(current_dir, ".agent", "skills", "jianying-editor"),
     os.path.join(current_dir, "jianying-editor-skill", ".agent", "skills", "jianying-editor"),
@@ -32,34 +31,21 @@ for p in skill_candidates:
         wrapper_path = os.path.join(p, "scripts")
         break
 
-if wrapper_path:
-    if wrapper_path not in sys.path: sys.path.insert(0, wrapper_path)
-    try:
-        from jy_wrapper import JyProject
-    except ImportError:
-        print("❌ Failed to import JyProject from found path.")
-else:
-    # Fallback: Assume we are inside the scripts folder or it's already in path
-    try:
-        from jy_wrapper import JyProject
-    except ImportError:
-        print("❌ Could not locate jianying-editor skill scripts.")
+if wrapper_path and wrapper_path not in sys.path:
+    sys.path.insert(0, wrapper_path)
+
+try:
+    from jy_wrapper import JyProject
+except ImportError:
+    # 这一步是为了在找不到路径时给出明确提示，方便调试
+    print("❌ Critical Error: Could not load 'jy_wrapper'. Check skill paths.")
+    sys.exit(1)
 # -------------------------------------------------------------
 
-# Start your logic here
-def create_video():
-    # 1. Initialize (Overwrite ensures clean state)
-    project = JyProject("My_Auto_Edit", overwrite=True)
-    
-    # 2. Add Media (Auto-detects Image/Video/Audio)
-    # webm/mp4/jpg/mp3 are all supported
-    project.add_media_safe(r"C:\assets\video.mp4", start_time="0s", duration="5s")
-    
-    # 3. Save & Sync
-    project.save()
-
+# 在此下方编写你的核心逻辑 (Example):
 if __name__ == "__main__":
-    create_video()
+    # 你的业务代码...
+    pass
 ```
 
 ## 核心 API (JyProject)
