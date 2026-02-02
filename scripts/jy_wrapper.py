@@ -104,12 +104,25 @@ def get_all_drafts(root_path: str = None):
     return sorted(drafts, key=lambda x: x['mtime'], reverse=True)
 
 # --- 3. 辅助函数: 模糊匹配 ---
+EFFECT_SYNONYMS = {
+    "typewriter": ["打字机", "字幕", "typing", "复古打字机"],
+    "fade": ["渐隐", "渐显", "黑场", "白场", "fade_in", "fade_out"],
+    "glitch": ["故障", "干扰", "燥波", "雪花"],
+    "zoom": ["拉近", "拉远", "缩放", "变焦"],
+    "shake": ["振动", "摇晃", "抖动"],
+    "blur": ["模糊", "虚化"],
+    "glow": ["发光", "辉光", "霓虹"],
+    "retro": ["复古", "胶片", "怀旧", "DV"],
+    "dissolve": ["叠化", "溶解", "混合"],
+}
+
 def _resolve_enum(enum_cls, name: str):
     """
     尝试从 Enum 类中找到匹配的属性。
     1. 精确匹配
     2. 大小写不敏感匹配
-    3. 模糊匹配 (difflib)
+    3. 中文同义词查表匹配 (New)
+    4. 模糊匹配 (difflib)
     """
     if not name: return None
     
@@ -124,8 +137,19 @@ def _resolve_enum(enum_cls, name: str):
     if name_lower in mapping:
         real_key = mapping[name_lower]
         return getattr(enum_cls, real_key)
+
+    # 3. Synonym Lookup (中文 -> English Enum Key)
+    # 遍历字典，看 name 是否在 values 列表中，或者 values 列表中的词是否在 name 中
+    for key, synonyms in EFFECT_SYNONYMS.items():
+        key_lower = key.lower()
+        if key_lower in mapping: # 确保 Enum 里真有这个 Key
+            for syn in synonyms:
+                if syn in name_lower or name_lower in syn:
+                    real_key = mapping[key_lower]
+                    print(f"ℹ️ Synonym Match: '{name}' -> '{real_key}'")
+                    return getattr(enum_cls, real_key)
     
-    # 3. Fuzzy
+    # 4. Fuzzy
     matches = difflib.get_close_matches(name, enum_cls.__members__.keys(), n=1, cutoff=0.6)
     if matches:
         print(f"ℹ️ Fuzzy Match: '{name}' -> '{matches[0]}'")
