@@ -1,5 +1,5 @@
 # JianYing Editor Skill for Antigravity
-![封面图](assets/readme_assets/cover.png)
+![封面图](assets/cover.png)
 
 ### 📺 [点击观看 B 站保姆级安装教程](https://www.bilibili.com/video/BV1hLzCBzEDS/?vd_source=0eaa8407ec8edd1e9f2a0abf6e126bf6)
 
@@ -35,10 +35,6 @@ git clone https://github.com/luoluoluo22/jianying-editor-skill.git .claude/skill
 # 通用方式：安装到根目录 include 列表
 git clone https://github.com/luoluoluo22/jianying-editor-skill.git skills/jianying-editor
 ```
-安装完成后，您可以在任何 AI 助手的对话框中直接下达指令（无需特定符号）：
-
-> "请使用 jianying-editor 帮我创建一个名为 'MyDemo' 的剪映草稿，导入 output.mp4，并在开场添加一个标题。"
-
 
 ### 3. 🛠️ 资源下载与版本准备 (Essential Resources)
 ⚠️ **重要提示**：本 Skill 的自动导出功能深度依赖 **剪映 5.9** (或更低版本)。
@@ -49,23 +45,22 @@ git clone https://github.com/luoluoluo22/jianying-editor-skill.git skills/jianyi
 
 ### 4. 🗣️ 试试这样问 AI (示例)
 
-**场景一：制作软件教程**
-> "帮我启动录屏工具"
+**🟢 基础：极简剪辑 (利用智能追加能力)**
+> "来一个简单的剪辑"
 
-**场景二：快速配乐剪辑**
-> "帮我把 `assets/` 里的视频导入剪映，配上那首 `audio.mp3` 的背景音乐，然后在视频开始的时候加一个‘复古打字机’效果的标题，内容是‘我的第一支 Vlog’。"
+**🟡 进阶：精准搜索与特效应用**
+> "帮我把 `assets/` 里的视频导入剪映，配上背景音乐，最后加一个带打字机动画的标题‘我的第一支 Vlog’。"
+
+**🟠 专业：软件教程录制 (录屏 + 智能缩放)**
+> "我想录一段代码运行教程。请帮我启动录屏工具。"
+
+**🔴 骨灰：影视解说全自动流水线（需安装antigravity-api-skill）**
+> "分析视频 `assets/video.mp4` 制作 60 秒影视解说。"
+
+**✨ 创意：网页动效合成 (Web-to-Video)**
+> "帮我用网页写一个‘红心粒子爆炸’的动效，并导入到剪映。"
 
 ---
-
-## 🌟 核心特性 (V3 进化版)
-
-- **顶级素材接入**:
-  - **banana (Imagen 3)**: 正式接入，支持一行指令生成 4K 电影级神兽/场景贴纸。
-  - **Grok 3 (Media)**: 视觉天花板级图生视频，让你的静态素材瞬间化身史诗大片。
-- **多轨管理**：支持视频、音频、字幕、贴纸、特效无限叠加，像专业剪辑师一样操作。
-- **全自动闭环**: 从 Claude 4.5 剧本创作到素材生成，再到剪映草稿合成，一键全自动。
-- **智能变焦**: 独家的 Smart Zoom 功能，能把普通的录屏自动变成“带镜头感”的演示视频。
-- **自动导出**：内置自动化脚本，支持一键导出 1080P/4K 视频，彻底解放双手。
 
 ## 📦 环境准备 (必读)
 
@@ -112,6 +107,23 @@ git pull
 
 ## 📅 更新日志 (Changelog)
 
+### v1.3 (2026-02-03) - 突破二次元壁！
+- **✨ 网页转视频 (Web-to-Video)**:
+  - 核心突破！现在支持直接将 **HTML/Javascript/Canvas/SVG** 编写的网页动效实时录制并无缝导入剪映主轨道。
+  - 集成 **Playwright 智能录屏引擎**，支持自动等待动画结束信号 (`window.animationFinished`)，产出高清无损素材。
+  - 真正实现“代码即特效”，让前端动效库（如 Three.js, GSAP, Lottie）成为你的剪接素材库。
+
+## 🌟 核心特性 (V3 进化版)
+
+- **顶级素材接入**:
+  - **banana (Imagen 3)**: 正式接入，支持一行指令生成 4K 电影级神兽/场景贴纸。
+  - **Grok 3 (Media)**: 视觉天花板级图生视频，让你的静态素材瞬间化身史诗大片。
+- **多轨管理**：支持视频、音频、字幕、贴纸、特效无限叠加，像专业剪辑师一样操作。
+- **全自动闭环**: 从 Claude 4.5 剧本创作到素材生成，再到剪映草稿合成，一键全自动。
+- **智能变焦**: 独家的 Smart Zoom 功能，能把普通的录屏自动变成“带镜头感”的演示视频。
+- **网页转视频 (Web-to-Video)**: 完美支持 Canvas/JS 动效实时捕捉，让 Web 的无限创意瞬间化身视频 VFX 素材。
+- **自动导出**：内置自动化脚本，支持一键导出 1080P/4K 视频，彻底解放双手。
+
 ### v1.2 (2026-01-27) - 像变魔术一样！
 - **✨ 智能变焦 (Smart Zoom)**:
   - 录制的教程视频太平淡？现在，它会自动帮你把镜头**推进特写**到鼠标点击的地方，就像电影镜头一样酷！
@@ -123,4 +135,3 @@ git pull
   - 录像文件会自动整理好，不再乱丢在桌面。
 
 ---
-Developed by Antigravity Agent Lab.

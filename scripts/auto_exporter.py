@@ -2,9 +2,12 @@ import sys
 import os
 import argparse
 
-# 确保能找到 pyJianYingDraft (向上跳 5 级到达工作区根目录)
-root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
-sys.path.append(root_dir)
+# 确保能找到 pyJianYingDraft (位于同级或上级的 references 目录)
+script_dir = os.path.dirname(os.path.abspath(__file__))
+references_dir = os.path.join(os.path.dirname(script_dir), "references")
+if references_dir not in sys.path:
+    sys.path.append(references_dir)
+
 import pyJianYingDraft as draft
 
 def auto_export(draft_name, output_path, resolution=None, framerate=None):

@@ -9,18 +9,37 @@ from pathlib import Path
 """
 
 # --- 1. 环境初始化 ---
+# Standard Boilerplate to load the skill wrapper and api libs
+import os
+import sys
+
 current_dir = os.path.dirname(os.path.abspath(__file__))
-# 自动定位 Antigravity API 技能路径
-# 假设脚本在 .agent/skills/jianying-editor/references 下，向上三级寻找 API 技能
-api_skill_libs = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(current_dir))), ".agent", "skills", "antigravity-api-skill", "libs")
-if os.path.exists(api_skill_libs):
-    sys.path.append(api_skill_libs)
+
+# A. Find Antigravity API Skill (for API reference)
+# Try standard locations relative to this skill usually at .agent/skills/jianying-editor/references
+# So we need to go up 3 levels to reach .agent/skills/
+possible_roots = [
+    os.path.join(current_dir, "..", "..", "..", "antigravity-api-skill"), # From .agent/skills/jianying-editor/references
+    os.path.join(current_dir, "..", "..", "antigravity-api-skill"),       # From skills/jianying-editor/references
+    os.path.abspath(os.path.join(current_dir, "../../../../../antigravity-api-skill")), # deep nested
+]
+api_lib_path = None
+for r in possible_roots:
+    lib = os.path.join(r, "libs")
+    if os.path.exists(lib):
+        api_lib_path = lib
+        break
+
+if api_lib_path and api_lib_path not in sys.path:
+    sys.path.append(api_lib_path)
 
 try:
     from api_client import AntigravityClient
 except ImportError:
-    print("❌ Error: 找不到 api_client。请确保已安装 antigravity-api-skill 技能。")
-    sys.exit(1)
+    # 允许在没有API环境的情况下被引用检查
+    print("⚠️ Warning: api_client not found (Antigravity API Skill missing).")
+    AntigravityClient = None
+
 
 def analyze_video_to_storyboard(video_path, output_json="storyboard.json", custom_prompt=None):
     if not os.path.exists(video_path):

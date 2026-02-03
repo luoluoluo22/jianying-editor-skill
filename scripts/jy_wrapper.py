@@ -264,7 +264,11 @@ class JyProject:
         else:
             diagnostics['validations'].append({"status": "PASS", "msg": "Media paths check"})
 
-        # 1.2 统计轨道信息与音量检查
+        # --- 1.2 时长异常检查 (建议 5) ---
+        # 如果非空项目的持续时长极短 (小于 0.1s)，通常意味着单位传参错误 (数字 vs 字符串)
+        # 我们在这里进行统计，逻辑在下方的轨道遍历中完成
+        
+        # 1.3 统计轨道信息与音量检查
         total_duration = 0
         audio_tracks_high_vol = 0
         bgm_candidates = []
@@ -300,6 +304,14 @@ class JyProject:
 
         if len(bgm_candidates) > 0 and track_stats['audio'] > 1:
              diagnostics['warnings'].append("Detected BGM track with other audio tracks. Please ensure BGM volume is lowered (e.g., -10dB).")
+
+        # 检查时长是否过短 (建议 5)
+        # 0.1s = 100,000us
+        has_content = any(v > 0 for v in track_stats.values())
+        if has_content and total_duration > 0 and total_duration < 100000:
+            diagnostics['warnings'].append(f"CRITICAL WARNING: Total duration is extremely short ({total_duration}us, approx {total_duration/1000000}s). "
+                                         "This usually happens when passing numeric seconds (e.g., 5.0) instead of strings (e.g., '5s'). "
+                                         "Please check your add_media/add_text calls.")
 
         diagnostics['stats']['duration_us'] = total_duration
         diagnostics['stats']['duration_formatted'] = format_srt_time(total_duration).split(',')[0]
@@ -425,17 +437,19 @@ class JyProject:
         except Exception as e:
             print(f"⚠️ Failed to update root_meta_info: {e}")
 
-    def add_web_asset_safe(self, html_path: str, start_time: Union[str, int], duration: Union[str, int] = "5s", 
+    def add_web_asset_safe(self, html_path: str, start_time: Union[str, int] = None, duration: Union[str, int] = "5s", 
                            track_name: str = "WebVfxTrack", **kwargs):
         """
         [封装核心]: 将一个 HTML 动效文件录制并导入剪映。
         
         Args:
             html_path: HTML 文件的绝对路径。
-            start_time: 在时间轴上的起始位置。
+            start_time: 在时间轴上的起始位置。如果为 None，自动追加到轨道末尾。
             duration: 持续时长。
             track_name: 目标轨道名称。
         """
+        if start_time is None:
+            start_time = self.get_track_duration(track_name)
         if not HAS_RECORDER:
             print("❌ Cannot add web asset: 'web_recorder' module or its dependencies (playwright) are missing.")
             return None
@@ -461,7 +475,7 @@ class JyProject:
         print(f"📥 Importing recorded video to jianying...")
         return self.add_media_safe(video_output, start_time, duration, track_name=track_name)
 
-    def add_web_code_vfx(self, html_code: str, start_time: Union[str, int], duration: Union[str, int] = "5s", 
+    def add_web_code_vfx(self, html_code: str, start_time: Union[str, int] = None, duration: Union[str, int] = "5s", 
                         track_name: str = "WebVfxTrack", **kwargs):
         """
         [顶级封装]: 直接传入 HTML 代码，自动保存并录制导入。
@@ -482,11 +496,16 @@ class JyProject:
         print(f"📝 Generated VFX HTML: {temp_html_path}")
         return self.add_web_asset_safe(temp_html_path, start_time, duration, track_name=track_name)
 
-    def add_media_safe(self, media_path: str, start_time: Union[str, int], duration: Union[str, int] = None, 
+    def add_media_safe(self, media_path: str, start_time: Union[str, int] = None, duration: Union[str, int] = None, 
                        track_name: str = None, source_start: Union[str, int] = 0, **kwargs):
         """
         自动容错的媒体添加方法 (Auto-Clamp)
         支持视频/图片/音频自动分流。
+        
+        Args:
+            media_path: 素材绝对路径
+            start_time: 起始位置。如果为 None (默认)，则自动追加到该轨道末尾 (Smart Append)。
+            duration: 持续时长 (建议使用 '5s' 格式字符串)。
         """
         if kwargs:
             print(f"⚠️ Warning: Ignored extra args in add_media_safe: {list(kwargs.keys())}")
@@ -526,8 +545,10 @@ class JyProject:
                 return max_end
         return 0
 
-    def add_audio_safe(self, media_path: str, start_time: Union[str, int], duration: Union[str, int] = None, 
+    def add_audio_safe(self, media_path: str, start_time: Union[str, int] = None, duration: Union[str, int] = None, 
                        track_name: str = "AudioTrack", **kwargs):
+        if start_time is None:
+            start_time = self.get_track_duration(track_name)
         self._ensure_track(draft.TrackType.audio, track_name)
         
         if kwargs:
@@ -551,8 +572,10 @@ class JyProject:
         self.script.add_segment(seg, track_name)
         return seg
 
-    def _add_video_safe(self, media_path: str, start_time: Union[str, int], duration: Union[str, int] = None, 
+    def _add_video_safe(self, media_path: str, start_time: Union[str, int] = None, duration: Union[str, int] = None, 
                         track_name: str = "VideoTrack", source_start: Union[str, int] = 0, **kwargs):
+        if start_time is None:
+            start_time = self.get_track_duration(track_name)
         self._ensure_track(draft.TrackType.video, track_name)
         
         try:
@@ -583,13 +606,17 @@ class JyProject:
     def _calculate_duration(self, req_duration, phys_duration):
         if req_duration is not None:
             req = tim(req_duration)
+            # 保护：如果请求时长非零但被解析为 0 (如 0.05)，强制设为 1微秒，防止底层库 ZeroDivisionError
+            if req == 0 and (isinstance(req_duration, (int, float)) and req_duration > 0):
+                req = 1
+            
             if req > phys_duration:
                 print(f"⚠️ Auto-Clamp: {req_duration} > physical. Using full length.")
                 return phys_duration
             return req
         return phys_duration
 
-    def add_text_simple(self, text: str, start_time, duration, 
+    def add_text_simple(self, text: str, start_time: Union[str, int] = None, duration: Union[str, int] = "3s", 
                         track_name: str = "TextTrack",
                         font_size: float = 5.0,
                         color_rgb: tuple = (1.0, 1.0, 1.0),
@@ -597,14 +624,16 @@ class JyProject:
                         align: int = 1,
                         auto_wrapping: bool = True,
                         transform_y: float = -0.8,
-                        anim_in: str = None,
-                        **kwargs):
+                        anim_in: str = None, **kwargs):
         """
         极简文本接口 (增强版 V2)
         特点:
         1. 容错: 自动忽略不支持的参数 (如 position) 并打印警告。
         2. 自动分层: 如果轨道上有重叠，自动创建新轨道 (TextTrack_L2, _L3...)。
+        3. 智能追加: 如果不传 start_time，自动衔接上一个片段。
         """
+        if start_time is None:
+            start_time = self.get_track_duration(track_name)
         # --- 1. 参数清洗与兼容 (Arguments Sanitization) ---
         if kwargs:
             print(f"⚠️ Warning: Ignored unsupported args in add_text_simple: {list(kwargs.keys())}")

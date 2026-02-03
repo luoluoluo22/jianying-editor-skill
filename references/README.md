@@ -6,7 +6,7 @@
 > 📢 欢迎加入[Discord服务器](https://discord.gg/WfHgGQvhyW)进行用法或新功能的讨论
 
 ## 使用思路
-![使用思路](readme_assets/使用思路.jpg)
+![使用思路](../assets/使用思路.jpg)
 
 # 功能清单
 > ℹ 如未额外注明，一般仅在5.9版本上测试过
@@ -82,7 +82,7 @@ pip install pyJianYingDraft
 2. 运行`demo.py`
 3. 在剪映中**找到并打开新创建的`demo`草稿**（可能需要进入再退出某个已有草稿，或重启剪映以刷新草稿列表），你应该看到类似如下的时间轴：
 
-![快速上手](readme_assets/快速上手.png)
+![快速上手](../assets/快速上手.png)
 
 你可以仔细检查音频片段的音量设置、淡入效果时长以及视频片段的入场动画效果等，看看是否符合上述代码的设置
 
@@ -334,7 +334,7 @@ for i in range(3, 0, -1): # 倒序
 
 # 以下部分讲解素材与片段的创建
 # 方式一：便捷构造（推荐）
-tutorial_asset_dir = os.path.join(os.path.dirname(__file__), 'readme_assets', 'tutorial')
+tutorial_asset_dir = os.path.join(os.path.dirname(__file__), 'assets')
 video_path = os.path.join(tutorial_asset_dir, 'video.mp4')
 
 # 直接传入素材路径
@@ -417,7 +417,7 @@ from pyJianYingDraft import KeyframeProperty, SEC
 
 # 假定已有草稿文件script（参见“快速上手”），创建视频轨道
 script.add_track(draft.TrackType.video)
-tutorial_asset_dir = os.path.join(os.path.dirname(__file__), 'readme_assets', 'tutorial')
+tutorial_asset_dir = os.path.join(os.path.dirname(__file__), 'assets')
 
 # 创建视频片段
 video_material = draft.VideoMaterial(os.path.join(tutorial_asset_dir, 'video.mp4'))
@@ -476,7 +476,7 @@ video_segment2.add_mask(MaskType.圆形, size=0.5)
 
 上述枚举类中的成员（通常）直接**以特效或滤镜的名字命名**，并注释了相应参数，例如：
 
-![特效类型](readme_assets/片段特效_annotation.jpg)
+![特效类型](../assets/片段特效_annotation.jpg)
 
 你也可以使用`from_name`方法来获取特定的成员，其忽略大小写、空格和下划线，例如：
 

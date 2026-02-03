@@ -2,33 +2,25 @@ import os
 import sys
 import json
 import re
+import argparse
 
 """
-影视解说全自动剪辑参考脚本 (V5 规范版)
+JianYing Movie Commentary Builder (Integrated Script)
 功能：加载 AI 生成的故事版 JSON，自动完成视频切片、字幕遮罩、双轨原声增强。
 """
 
-# --- 1. 环境初始化 ---
-# 这里使用相对路径，确保在不同环境下都能正确定位 Skill 脚本
+# 环境初始化 (由于在 scripts 目录下，直接 import jy_wrapper)
 current_dir = os.path.dirname(os.path.abspath(__file__))
-# 假设脚本放在 skill 的 examples 目录下
-skill_root = os.path.dirname(os.path.dirname(current_dir)) 
-# 如果是在项目根目录运行，请使用以下注入逻辑
-if not os.path.exists(os.path.join(current_dir, "pyJianYingDraft")):
-    skill_scripts = os.path.join(skill_root, ".agent", "skills", "jianying-editor", "scripts")
-    if os.path.exists(skill_scripts):
-        sys.path.append(skill_scripts)
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
 
 try:
     from jy_wrapper import JyProject, draft
 except ImportError:
-    print("❌ Error: 找不到 jy_wrapper。请确保已正确导入 jianying-editor 技能。")
+    print("❌ Critical Error: Could not load 'jy_wrapper'.")
     sys.exit(1)
 
-def build_movie_commentary(video_path, storyboard_path, project_name="AI_Auto_Commentary", bgm_path=None, mask_path=None):
-    print(f"🎬 开始构建解说视频: {project_name}")
-    
-    # --- 2. 加载数据 ---
+def build_movie_commentary(video_path, storyboard_path, project_name="AI_Movie_Commentary", bgm_path=None, mask_path=None):
     if not os.path.exists(storyboard_path):
         print(f"❌ 错误: 找不到故事版文件 {storyboard_path}")
         return
@@ -36,11 +28,9 @@ def build_movie_commentary(video_path, storyboard_path, project_name="AI_Auto_Co
     with open(storyboard_path, 'r', encoding='utf-8') as f:
         storyboard = json.load(f)
 
-    # --- 3. 初始化项目 ---
     project = JyProject(project_name, overwrite=True)
-    timeline_cursor = 0 # 微秒单位
+    timeline_cursor = 0 
 
-    # --- 4. 循环处理片段 ---
     for i, scene in enumerate(storyboard):
         start_str = scene['start']
         duration = scene['duration']
@@ -53,25 +43,15 @@ def build_movie_commentary(video_path, storyboard_path, project_name="AI_Auto_Co
             
         duration_us = int(duration * 1000000)
         
-        # A. 添加主视频片段 (MainTrack)
+        # A. 添加主视频片段
         project.add_media_safe(video_path, timeline_cursor, duration_us, "MainTrack", source_start=src_start_us)
 
         if text:
-            # --- 解说片段逻辑 ---
-            # B. 字幕遮罩 (强制底部)
+            # B. 字幕遮罩 (如果有)
             if mask_path and os.path.exists(mask_path):
-                from pyJianYingDraft import VideoMaterial, VideoSegment, trange, ClipSettings
-                mask_mat = VideoMaterial(mask_path)
-                mask_seg = VideoSegment(
-                    mask_mat,
-                    target_timerange=trange(timeline_cursor, duration_us),
-                    source_timerange=trange(0, duration_us),
-                    clip_settings=ClipSettings(transform_y=-0.85)
-                )
-                project._ensure_track(draft.TrackType.video, "MaskTrack")
-                project.script.add_segment(mask_seg, "MaskTrack")
+                project.add_media_safe(mask_path, timeline_cursor, duration_us, "MaskTrack", transform_y=-0.85)
 
-            # C. 智能字幕 (剥离标点)
+            # C. 智能字幕拆分
             split_pattern = r'([，。！？；：,.!?])'
             parts = re.split(split_pattern, text)
             sub_segments = [p for p in parts if p and p not in "，。！？；：,.!?"]
@@ -85,25 +65,23 @@ def build_movie_commentary(video_path, storyboard_path, project_name="AI_Auto_Co
                         project.add_text_simple(display_text, local_cursor, sub_dur_us, transform_y=-0.8)
                     local_cursor += sub_dur_us
         else:
-            # --- 原声高光片段逻辑 ---
-            # D. 双轨增强 (HighlightTrack)
+            # D. 原声高光片段逻辑 (双轨增强)
             project.add_media_safe(video_path, timeline_cursor, duration_us, "HighlightTrack", source_start=src_start_us)
 
         timeline_cursor += duration_us
 
-    # --- 5. 装饰与保存 ---
     if bgm_path and os.path.exists(bgm_path):
         project.add_audio_safe(bgm_path, 0, timeline_cursor, "BGM_Track")
 
     project.save()
-    print(f"✅ 生成完毕！草稿名称: {project_name}")
 
 if __name__ == "__main__":
-    # 示例用法 (Agent 在执行时应根据实际路径填充变量)
-    # build_movie_commentary(
-    #     video_path="input_video.mp4", 
-    #     storyboard_path="storyboard.json", 
-    #     bgm_path="background.mp3",
-    #     mask_path="mask.png"
-    # )
-    pass
+    parser = argparse.ArgumentParser(description="解说视频自动构建工具")
+    parser.add_argument("--video", required=True, help="原视频路径")
+    parser.add_argument("--json", required=True, help="故事版 JSON 路径")
+    parser.add_argument("--name", default="Movie_Commentary_Project", help="项目名称")
+    parser.add_argument("--bgm", help="BGM 路径")
+    parser.add_argument("--mask", help="遮罩图路径")
+
+    args = parser.parse_args()
+    build_movie_commentary(args.video, args.json, args.name, args.bgm, args.mask)

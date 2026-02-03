@@ -31,7 +31,7 @@ sys.path.append(os.path.join(skill_root, "references"))
 from jy_wrapper import JyProject, draft
 
 # --- 2. 辅助路径 ---
-ASSETS_DIR = os.path.join(skill_root, "assets", "readme_assets", "tutorial")
+ASSETS_DIR = os.path.join(skill_root, "assets")
 VIDEO_PATH = os.path.join(ASSETS_DIR, "video.mp4")
 AUDIO_PATH = os.path.join(ASSETS_DIR, "audio.mp3")
 

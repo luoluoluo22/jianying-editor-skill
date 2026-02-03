@@ -1,39 +1,38 @@
-
 import os
 import sys
 
-# ==============================================================================
-# 🚀 JianYing Skill Boilerplate (环境初始化标准代码)
-# ==============================================================================
-# 这一段代码负责让 Python 脚本能找到 jianying-editor skill 的核心库
-# 请在你的所有脚本中保留这段代码
+# Standard Boilerplate to load the skill wrapper
+# -------------------------------------------------------------
+# 必选：这段代码负责自动定位 Skill 路径，请原样复制到你的脚本开头
 current_dir = os.path.dirname(os.path.abspath(__file__))
-# 向上寻找 skill 根目录，直到找到 scripts 文件夹
-skill_root = os.path.dirname(current_dir) # 假设本文件在 examples/ 下
-jy_script_path = os.path.join(skill_root, "scripts")
+# 扩展探测逻辑：覆盖 Antigravity(.agent), Trae(.trae), Claude(.claude), 以及通用(skills)
+skill_candidates = [
+    os.path.join(current_dir, ".agent", "skills", "jianying-editor"),
+    os.path.join(current_dir, ".trae", "skills", "jianying-editor"),
+    os.path.join(current_dir, ".claude", "skills", "jianying-editor"),
+    os.path.join(current_dir, "skills", "jianying-editor"),
+    os.path.join(current_dir, "jianying-editor-skill", ".agent", "skills", "jianying-editor"),
+    os.path.abspath(".agent/skills/jianying-editor"),
+    # Special case for examples folder (up one level)
+    os.path.join(os.path.dirname(current_dir)) 
+]
+wrapper_path = None
+for p in skill_candidates:
+    if os.path.exists(os.path.join(p, "scripts", "jy_wrapper.py")):
+        wrapper_path = os.path.join(p, "scripts")
+        break
 
-# 如果找不到，尝试更广泛的探测（兼容直接运行的情况）
-if not os.path.exists(os.path.join(jy_script_path, "jy_wrapper.py")):
-    candidates = [
-        os.path.abspath(os.path.join(current_dir, "..", ".agent", "skills", "jianying-editor", "scripts")),
-        os.path.abspath(os.path.join(current_dir, "..", "scripts")),
-        r"F:\Desktop\kaifa\jianying-editor-skill\.agent\skills\jianying-editor\scripts" # 本地开发绝对路径兜底
-    ]
-    for p in candidates:
-        if os.path.exists(os.path.join(p, "jy_wrapper.py")):
-            jy_script_path = p
-            break
-
-if jy_script_path not in sys.path:
-    sys.path.insert(0, jy_script_path)
+if wrapper_path and wrapper_path not in sys.path:
+    sys.path.insert(0, wrapper_path)
 
 try:
     from jy_wrapper import JyProject
-    print(f"✅ Successfully loaded JyProject from: {jy_script_path}")
-except ImportError as e:
-    print(f"❌ Critical Error: Failed to import JyProject. Path: {jy_script_path}")
-    print(f"Error details: {e}")
+    print(f"✅ Successfully loaded JyProject from: {wrapper_path}") # Added print for success
+except ImportError:
+    # 这一步是为了在找不到路径时给出明确提示，方便调试
+    print("❌ Critical Error: Could not load 'jy_wrapper'. Check skill paths.")
     sys.exit(1)
+# -------------------------------------------------------------
 
 # ==============================================================================
 # 🎬 简单剪辑示例 (Simple Clip Demo)
@@ -46,7 +45,13 @@ def main():
     project = JyProject(project_name="Hello_JianYing_V3", overwrite=True)
     
     # 2. 准备素材路径 (这里使用 Skill 自带的测试素材)
-    assets_dir = os.path.join(skill_root, "assets", "readme_assets", "tutorial")
+    # wrapper_path是指向 scripts 目录的，它的上一级通常是 skill root
+    if 'wrapper_path' in globals() and wrapper_path:
+        skill_root = os.path.dirname(wrapper_path)
+    else:
+        # Fallback if wrapper_path somehow isn't set (shouldn't happen with new boilerplate)
+        skill_root = os.path.abspath(os.path.join(current_dir, ".."))
+    assets_dir = os.path.join(skill_root, "assets")
     video_path = os.path.join(assets_dir, "video.mp4")
     bgm_path = os.path.join(assets_dir, "audio.mp3")
 
