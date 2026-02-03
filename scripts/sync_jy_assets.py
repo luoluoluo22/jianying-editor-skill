@@ -11,7 +11,14 @@ JY_CACHE_MUSIC = os.path.join(JY_USER_DATA, r"Cache\music")
 
 # Skill 根目录 (scripts 的上一级)
 SKILL_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEST_DIR = os.path.join(SKILL_ROOT, "assets", "jy_sync")
+# Sync to Project Root's assets folder, not inside .agent/skills
+PROJECT_ROOT = os.path.dirname(SKILL_ROOT) # Assuming SKILL_ROOT is .agent/skills/jianying-editor, go up 3 levels?
+# Better: Just assume we run from project root or find it relative to script
+# If script is in .agent/skills/jianying-editor/scripts/sync_jy_assets.py
+# SKILL_ROOT is .agent/skills/jianying-editor
+# We want f:\Desktop\kaifa\jianying-editor-skill\assets\jy_sync
+PROJECT_ROOT = os.path.abspath(os.path.join(SKILL_ROOT, "..", "..", "..")) 
+DEST_DIR = os.path.join(PROJECT_ROOT, "assets", "jy_sync")
 DATA_DIR = os.path.join(SKILL_ROOT, "data")
 
 def sync_music_cache_robust():
