@@ -178,7 +178,97 @@ def format_srt_time(us: int) -> str:
     h = (us // 3600000000)
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
-# --- 4. High-Level Facade ---
+# --- 4. 复合片段辅助类 (Internal) ---
+class MockVideoMaterial:
+    """绕过底层库物理文件检测的伪视频素材类"""
+    def __init__(self, material_id, duration, name, width=1920, height=1080):
+        self._id = material_id
+        self.duration = duration
+        self.material_name = name
+        self.width = width
+        self.height = height
+        self.path = ""
+    
+    @property
+    def material_id(self): return self._id
+
+    def export_json(self):
+        return {
+            "id": self._id,
+            "type": "video",
+            "material_name": self.material_name,
+            "path": "",
+            "extra_type_option": 2, # 复合片段核心标识
+            "duration": self.duration,
+            "height": self.height,
+            "width": self.width,
+            "category_id": "",
+            "category_name": "local",
+            "check_flag": 63487,
+            "local_material_id": ""
+        }
+
+class CompoundSegment(draft.VideoSegment):
+    """自定义复合片段 Segment，完全解耦 MediaInfo 检测"""
+    def __init__(self, mock_material, draft_id, duration, start_us=0):
+        # 绕过父类初始化以规避路径检测逻辑
+        self.material_instance = mock_material
+        self.target_timerange = draft.Timerange(start_us, duration)
+        self.source_timerange = draft.Timerange(0, duration)
+        self.draft_id = draft_id
+        self.duration_val = duration
+        
+        # 兼容基类必要属性
+        self.segment_id = uuid.uuid4().hex.upper()
+        self.material_id = mock_material.material_id
+        self.common_keyframes = []
+        self.render_index = 0
+        self.visible = True
+        self.volume = 1.0
+        self.speed = None # 复合片段不直接由底层库处理变速
+        self.clip_settings = draft.ClipSettings()
+        self.animations_instance = None
+        self.fade = None
+        self.effects = []
+        self.filters = []
+        self.mask = None
+        self.background_filling = None
+
+    def export_json(self):
+        # 纯手工构建符合嵌套协议的 JSON
+        return {
+            "id": self.segment_id,
+            "material_id": self.material_id,
+            "extra_material_refs": [self.draft_id],
+            "target_timerange": self.target_timerange.export_json(),
+            "source_timerange": {"start": 0, "duration": self.duration_val},
+            "render_index": 0,
+            "visible": True,
+            "volume": 1.0,
+            "speed": 1.0,
+            "track_attribute": 0,
+            "extra_type_option": 0,
+            "clip": self.clip_settings.export_json(),
+            "common_keyframes": [],
+            "enable_adjust": True,
+            "enable_color_correct_adjust": False,
+            "enable_color_curves": True,
+            "enable_color_match_adjust": False,
+            "enable_color_wheels": True,
+            "enable_lut": True,
+            "enable_smart_color_adjust": False,
+            "hdr_settings": {"intensity": 1.0, "mode": 1, "nits": 1000},
+            "responsive_layout": {"enable": False, "horizontal_pos_layout": 0, "size_layout": 0, "target_follow": "", "vertical_pos_layout": 0},
+            "uniform_scale": {"on": True, "value": 1.0},
+            "keyframe_refs": []
+        }
+    
+    def overlaps(self, other):
+        # 如果不是标准 Segment 类型，简单返回 False 或执行基础判断
+        if not hasattr(other, 'target_timerange'): return False
+        return self.target_timerange.overlaps(other.target_timerange)
+
+# --- 5. High-Level Facade ---
 
 class JyProject:
     """
@@ -603,6 +693,64 @@ class JyProject:
         self.script.add_segment(seg, track_name)
         return seg
 
+    def add_compound_project(self, sub_project, clip_name: str = None, start_time: Union[str, int] = None, track_name: str = "VideoTrack"):
+        """
+        [顶级进阶接口]: 将另一个 JyProject 对象整体打包为复合片段注入当前工程。
+        原理: 协议级嵌套，实现真正的模组化剪辑。
+        """
+        if start_time is None:
+            start_time = self.get_track_duration(track_name)
+        
+        main_script = self.script
+        sub_script = sub_project.script
+        
+        # 1. 生成协议所需的 ID
+        combination_id = str(uuid.uuid4()).upper()
+        draft_material_id = str(uuid.uuid4()).upper()
+        video_material_id = str(uuid.uuid4()).upper()
+        
+        import json
+        sub_data = json.loads(sub_script.dumps())
+        duration = sub_data.get("duration", 0)
+        clip_name = clip_name or sub_project.name
+        
+        # 2. 注入伪视频素材
+        mock_mat = MockVideoMaterial(video_material_id, duration, clip_name, width=main_script.width, height=main_script.height)
+        main_script.materials.videos.append(mock_mat)
+        
+        # 3. 注入嵌套工程素材 (Hook ScriptMaterial 以支持输出 drafts 数组)
+        draft_meta = {
+            "id": draft_material_id,
+            "combination_id": combination_id,
+            "type": "combination",
+            "name": clip_name,
+            "draft": sub_data
+        }
+        
+        if not hasattr(main_script.materials, "custom_drafts"):
+            main_script.materials.custom_drafts = []
+            orig_export = main_script.materials.export_json
+            def new_export():
+                d = orig_export()
+                # 注入嵌套工程协议列表
+                d["drafts"] = main_script.materials.custom_drafts
+                return d
+            main_script.materials.export_json = new_export
+            
+        main_script.materials.custom_drafts.append(draft_meta)
+        
+        # 4. 创建轨道并添加自定义 Segment
+        self._ensure_track(draft.TrackType.video, track_name)
+        track = self.script.tracks[track_name]
+        
+        start_us = tim(start_time)
+        seg = CompoundSegment(mock_mat, draft_material_id, duration, start_us=start_us)
+        track.add_segment(seg)
+        
+        main_script.duration = max(main_script.duration, start_us + duration)
+        print(f"📦 Compound Injection: '{clip_name}' -> '{self.name}' (Start: {start_us/1e6}s, Dur: {duration/1e6}s)")
+        return seg
+
     def _calculate_duration(self, req_duration, phys_duration):
         if req_duration is not None:
             req = tim(req_duration)
@@ -719,9 +867,10 @@ class JyProject:
         except Exception as e:
             print(f"❌ Failed to add effect: {e}")
 
-    def add_transition_simple(self, transition_name: str, duration: str = "0.5s", track_name: str = "VideoTrack"):
+    def add_transition_simple(self, transition_name: str, duration: str = "0.5s", track_name: str = "VideoTrack", effect_id: str = None):
         """
         向指定轨道的最后两个片段之间添加转场。
+        支持 transition_name (Enum 模糊匹配) 或 effect_id (原始 ID)。
         """
         # 找到对应轨道 (兼容 List/Dict)
         track = None
@@ -744,22 +893,30 @@ class JyProject:
             print(f"⚠️ Cannot add transition: Track '{track_name}' not found or empty.")
             return
 
-        trans_enum = _resolve_enum(TransitionType, transition_name)
-        if not trans_enum: return
+        if effect_id:
+            from types import SimpleNamespace
+            # 兼容 pyJianYingDraft 的 TransitionMeta 接口，需要同时有 name 和 value
+            trans_enum = SimpleNamespace(value=effect_id, name=transition_name or "CustomTransition")
+        else:
+            trans_enum = _resolve_enum(TransitionType, transition_name)
+        
+        if not trans_enum: 
+            print(f"⚠️ Could not resolve transition: {transition_name}")
+            return
 
         # 这里的逻辑假设最后添加的片段需要转场
-        # pyJianYingDraft 的 add_transition 是加在 VideoSegment 对象上的
-        # 通常是加在“后面”那个片段上，或者“前面”？ docs says: "注意转场应当添加在**前面的**片段上"??
-        # Let's check docs from prev step: "为视频片段添加转场, 注意转场应当添加在**前面的**片段上" -> So add to segment[i] to transition to segment[i+1]??
-        # Or add to segment[i] to transition FROM it? 
-        # Usually it's attached to the incoming or outgoing. Let's assume we add to the last segment added.
-        
         last_seg = track.segments[-1]
         try:
-            last_seg.add_transition(trans_enum, duration=duration)
-            print(f"🔗 Added Transition: {transition_name}")
+            # 关键修复: 转换 duration 为微秒
+            dur_us = tim(duration)
+            print(f"DEBUG: trans_enum={trans_enum} (type={type(trans_enum)})")
+            print(f"DEBUG: last_seg={last_seg} (type={type(last_seg)})")
+            last_seg.add_transition(trans_enum, duration=dur_us)
+            print(f"🔗 Added Transition: {transition_name or effect_id} (Duration: {dur_us}us)")
         except Exception as e:
+            import traceback
             print(f"❌ Failed add transition: {e}")
+            traceback.print_exc()
 
     def apply_smart_zoom(self, video_segment, events_json_path, zoom_scale=150):
         """

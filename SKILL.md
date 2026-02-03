@@ -27,6 +27,7 @@ Read the individual rule files for specific tasks and constraints:
 Refer to these for complete workflows:
 - [examples/my_first_vlog.py](examples/my_first_vlog.py) - A complete vlog creation demo with background music and animated text.
 - [examples/simple_clip_demo.py](examples/simple_clip_demo.py) - Quick-start tutorial for basic cutting and track management.
+- [examples/compound_clip_demo.py](examples/compound_clip_demo.py) - **New**: Professional nested project (Compound Clip) automation.
 
 ## 🧠 提示词与集成工具 (Prompts & Integrated Tools)
 

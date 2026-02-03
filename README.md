@@ -64,6 +64,9 @@ git clone https://github.com/luoluoluo22/jianying-editor-skill.git skills/jianyi
 **✨ 创意：网页动效合成 (Web-to-Video)**
 > "帮我用网页写一个‘红心粒子爆炸’的动效，并导入到剪映。"
 
+**📦 进阶：复合片段 (Nested Projects)**
+> "我想做一个嵌套剪辑：先生成一个带字幕的‘片头’子工程，然后把它作为一个复合片段插入到我的主视频教程中。"
+
 ---
 
 ## 📦 环境准备 (必读)
