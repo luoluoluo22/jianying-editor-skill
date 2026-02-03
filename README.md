@@ -69,8 +69,8 @@ git clone https://github.com/luoluoluo22/jianying-editor-skill.git skills/jianyi
 ### 1. 安装 Python 依赖
 请在终端运行以下命令以确保所有自动化功能正常工作：
 ```bash
-# 安装库：自动化导出、录屏监听、网页录制
-pip install uiautomation playwright pynput
+# 安装库：自动化导出、录屏监听、网页录制、AI 配音
+pip install uiautomation playwright pynput edge-tts
 
 # 初始化网页捕获环境 (Web-to-Video 功能必填)
 playwright install chromium

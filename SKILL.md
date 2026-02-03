@@ -20,6 +20,7 @@ Read the individual rule files for specific tasks and constraints:
 - [rules/recording.md](rules/recording.md) - **New**: Screen Recording & Smart Zoom automation.
 - [rules/web-vfx.md](rules/web-vfx.md) - Advanced: Web-to-Video generation.
 - [rules/generative.md](rules/generative.md) - Chain of Thought for generative editing.
+- [rules/audio-voice.md](rules/audio-voice.md) - **New**: TTS Voiceover & BGM sourcing.
 
 ## 📖 经典示例 (Examples)
 
