@@ -39,6 +39,10 @@ Use these templates and scripts for complex tasks:
   ```bash
   python <SKILL_ROOT>/scripts/movie_commentary_builder.py --video "video.mp4" --json "storyboard.json"
   ```
+- **Sync Native Assets**: Import your favorited/played BGM from JianYing App to the Skill:
+  ```bash
+  python <SKILL_ROOT>/scripts/sync_jy_assets.py
+  ```
 - **Screen Recorder & Smart Zoom**: Record your screen and auto-apply zoom keyframes:
   ```bash
   python <SKILL_ROOT>/tools/recording/recorder.py

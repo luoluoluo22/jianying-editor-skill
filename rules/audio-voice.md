@@ -28,13 +28,20 @@ async def generate_voice(text, output_path):
     await communicate.save(output_path)
 ```
 
-## 2. Background Music (BGM)
-If local assets are insufficient, source royalty-free music from the web.
+## 2. JianYing Internal BGM (Native Integration)
+This is the **preferred** way to use BGM.
+- **Workflow**: 
+    1. AI tells User: "Please search and play [Music Name] in JianYing once."
+    2. AI/User runs: `python scripts/sync_jy_assets.py` to index the cache.
+    3. AI uses `asset_search.py` (checks `jy_cached_audio.csv`) to get local path.
+
+## 3. Web Sourcing (Fallback)
+If native assets are missing after sync, source royalty-free music from the web.
 
 ### Sourcing Strategy:
-1.  **Search**: Use `search_web` to find direct MP3 links from royalty-free sites (e.g., Mixkit, Pixabay, SoundHelix).
-2.  **Download**: Use `curl.exe -L -o bgm.mp3 "{URL}"` to fetch the file.
-3.  **Looping**: If the video is longer than the music, use the `duration` parameter in `add_audio_safe`; the wrapper handles the "Auto-Clamp" if needed, but for music, it's better to loop the segment if necessary.
+1.  **Search**: Use `search_web` to find direct MP3 links from royalty-free sites.
+2.  **Download**: Use `curl.exe -L -o bgm.mp3 "{URL}"`.
+3.  **Looping**: Specified in `add_audio_safe(duration=...)`.
 
 ## 3. Subtitle Syncing (TTS to Text)
 When adding TTS, you MUST add corresponding subtitles.
