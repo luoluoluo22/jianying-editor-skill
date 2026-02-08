@@ -26,6 +26,7 @@ class BaseSegment:
         self.target_timerange = target_timerange
 
         self.common_keyframes = []
+        self.enable_color_correct_adjust = False
 
     @property
     def start(self) -> int:
@@ -56,7 +57,7 @@ class BaseSegment:
         """返回通用于各种片段的属性"""
         return {
             "enable_adjust": True,
-            "enable_color_correct_adjust": False,
+            "enable_color_correct_adjust": self.enable_color_correct_adjust,
             "enable_color_curves": True,
             "enable_color_match_adjust": False,
             "enable_color_wheels": True,
@@ -268,6 +269,11 @@ class VisualSegment(MediaSegment):
             _property = KeyframeProperty.scale_x
 
         if isinstance(time_offset, str): time_offset = tim(time_offset)
+
+        # 按需开启颜色调节开关
+        color_props = [KeyframeProperty.brightness, KeyframeProperty.contrast, KeyframeProperty.saturation]
+        if _property in color_props:
+            self.enable_color_correct_adjust = True
 
         for kf_list in self.common_keyframes:
             if kf_list.keyframe_property == _property:

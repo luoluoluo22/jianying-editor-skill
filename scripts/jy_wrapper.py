@@ -554,6 +554,8 @@ class JyProject:
         draft_path = os.path.join(self.root, self.name)
         try:
             self.script.save()
+            # 自动注入激活补丁，解决亮度/曝光等参数不即时生效的问题
+            self._force_activate_adjustments()
             save_status = "SUCCESS"
             if os.path.exists(draft_path):
                 os.utime(draft_path, None)
@@ -576,6 +578,75 @@ class JyProject:
         # 现在改为静默生成，只在看板前端展示
         print(f"✅ Report generated successfully: {report['report_summary']['missing_files']} files missing.")
         return report
+
+    def _force_activate_adjustments(self):
+        """
+        [协议级补丁]: 强行注入影子材质和引用链。
+        解决代码注入亮度、对比度等关键帧后，剪映渲染引擎不激活的问题。
+        """
+        import json
+        import uuid
+
+        content_path = os.path.join(self.root, self.name, "draft_content.json")
+        if not os.path.exists(content_path): return
+
+        try:
+            with open(content_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+
+            has_modified = False
+            materials = data.setdefault("materials", {})
+            all_effects = materials.setdefault("effects", [])
+            video_effects = materials.setdefault("video_effects", [])
+
+            PROP_MAP = {
+                "KFTypeBrightness": "brightness",
+                "KFTypeContrast": "contrast",
+                "KFTypeSaturation": "saturation"
+            }
+            # 适配当前版本的路径
+            jy_res_path = "C:/Program Files/JianyingPro/5.9.0.11632/Resources/DefaultAdjustBundle/combine_adjust"
+
+            for track in data.get("tracks", []):
+                for seg in track.get("segments", []):
+                    kfs = seg.get("common_keyframes", [])
+                    active_props = [kf.get("property_type") for kf in kfs if kf.get("property_type") in PROP_MAP]
+
+                    if active_props:
+                        seg["enable_adjust"] = True
+                        seg["enable_color_correct_adjust"] = True
+                        refs = seg.setdefault("extra_material_refs", [])
+
+                        for prop in active_props:
+                            mat_type = PROP_MAP[prop]
+                            if not any(m.get("type") == mat_type and m["id"] in refs for m in all_effects):
+                                new_id = str(uuid.uuid4()).upper()
+                                shadow_mat = {
+                                    "type": mat_type, "value": 0.0, "path": jy_res_path, "id": new_id,
+                                    "apply_target_type": 0, "platform": "all", "source_platform": 0, "version": "v2"
+                                }
+                                all_effects.append(shadow_mat)
+                                refs.append(new_id)
+                                has_modified = True
+
+                        if not any(m.get("type") == "video_effect" and m["id"] in refs for m in video_effects):
+                            adj_id = str(uuid.uuid4()).upper()
+                            adjust_material = {
+                                "id": adj_id, "name": "调节", "type": "video_effect",
+                                "effect_id": "7051252119932014606", "resource_id": "7051252119932014606",
+                                "apply_target_type": 0, "source_platform": 0, "platform": "all"
+                            }
+                            video_effects.append(adjust_material)
+                            refs.append(adj_id)
+                            has_modified = True
+
+            if has_modified:
+                with open(content_path, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, ensure_ascii=False)
+                print(f"🪄  Auto-Activated color adjustments for project '{self.name}'.")
+
+        except Exception as e:
+            print(f"⚠️  Force activation failed: {e}")
 
     def _update_root_meta_info(self, draft_path: str, duration_us: int = 0):
         """
