@@ -35,6 +35,34 @@
         .prompt-card:hover { border-color: #FFD100; box-shadow: 0 10px 20px -10px rgba(0,0,0,0.1); }
         .prompt-copy-btn { position: absolute; bottom: 1rem; right: 1rem; opacity: 0; transition: all 0.2s; }
         .prompt-card:hover .prompt-copy-btn { opacity: 1; }
+        @keyframes flow {
+            from { stroke-dashoffset: 16; }
+            to { stroke-dashoffset: 0; }
+        }
+        @keyframes flow-reverse {
+            from { stroke-dashoffset: 0; }
+            to { stroke-dashoffset: 16; }
+        }
+        .animate-flow {
+            animation: flow 1s linear infinite;
+        }
+        .animate-flow-reverse {
+            animation: flow-reverse 1s linear infinite;
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+        .animate-pulse-ring {
+            animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+        .animate-float {
+            animation: float 3s ease-in-out infinite;
+        }
     </style>
 </head>
 <body class="bg-slate-50 dark:bg-[#0A0A0A] text-slate-900 dark:text-zinc-100 selection:bg-[#FFD100] selection:text-black">
@@ -46,6 +74,7 @@
         </div>
         <nav class="space-y-4 text-sm text-slate-500 dark:text-zinc-500">
             <a href="#introduction" class="sidebar-link block border-l-2 border-transparent pl-4 hover:text-slate-900 dark:hover:text-white transition-all">项目简介</a>
+            <a href="#how-it-works" class="sidebar-link block border-l-2 border-transparent pl-4 hover:text-slate-900 dark:hover:text-white transition-all">互动原理</a>
             <a href="#quick-start" class="sidebar-link block border-l-2 border-transparent pl-4 hover:text-slate-900 dark:hover:text-white transition-all">快速开始</a>
             <a href="#ide-matrix" class="sidebar-link block border-l-2 border-transparent pl-4 hover:text-slate-900 dark:hover:text-white transition-all">多 IDE 安装</a>
             <a href="#environment" class="sidebar-link block border-l-2 border-transparent pl-4 hover:text-slate-900 dark:hover:text-white transition-all">环境准备</a>
@@ -82,6 +111,105 @@
             <p class="text-xl text-slate-500 dark:text-zinc-400 mb-12 max-w-2xl leading-relaxed">
                 赋予 AI “手眼”，使其能通过 Python 代码全自动生成、编辑和导出剪映视频草稿。不仅支持基础剪辑，更支持网页动效生成 (Web-to-Video) 和生成式 VFX。
             </p>
+        </section>
+
+        <section id="how-it-works" class="reveal py-24 border-t border-slate-100 dark:border-zinc-900">
+            <h3 class="text-4xl font-bold mb-16 text-center">互动原理 <span class="text-[#FFD100] italic">How it works</span></h3>
+
+            <div class="relative flex flex-col md:flex-row items-center justify-between gap-12 md:gap-0 px-4">
+                <svg class="hidden">
+                    <defs>
+                        <marker id="arrow-f" markerWidth="10" markerHeight="10" refX="8" refY="5" orientation="auto">
+                            <path d="M0,2 L8,5 L0,8 Z" fill="#FFD100" />
+                        </marker>
+                    </defs>
+                </svg>
+
+                <!-- Connector 1-2 (Desktop) -->
+                <div class="hidden md:block absolute left-[12.5%] w-[25%] top-8 z-0">
+                    <svg class="w-full overflow-visible" height="1" viewBox="0 0 100 1" preserveAspectRatio="none">
+                        <path d="M 0 0 L 95 0" fill="none" stroke="#FFD100" stroke-width="2" stroke-dasharray="4 4" class="animate-flow" opacity="0.8" marker-end="url(#arrow-f)" />
+                    </svg>
+                </div>
+                <!-- Connector 2-3 (Desktop) -->
+                <div class="hidden md:block absolute left-[37.5%] w-[25%] top-8 z-0">
+                    <svg class="w-full overflow-visible" height="1" viewBox="0 0 100 1" preserveAspectRatio="none">
+                        <path d="M 0 0 L 95 0" fill="none" stroke="#FFD100" stroke-width="2" stroke-dasharray="4 4" class="animate-flow" opacity="0.8" marker-end="url(#arrow-f)" />
+                    </svg>
+                </div>
+                <!-- Connector 3-4 (Desktop) -->
+                <div class="hidden md:block absolute left-[62.5%] w-[25%] top-8 z-0">
+                    <svg class="w-full overflow-visible" height="1" viewBox="0 0 100 1" preserveAspectRatio="none">
+                        <path d="M 0 0 L 95 0" fill="none" stroke="#FFD100" stroke-width="2" stroke-dasharray="4 4" class="animate-flow" opacity="0.8" marker-end="url(#arrow-f)" />
+                    </svg>
+                </div>
+
+                <!-- Node 1: AI -->
+                <div class="flex flex-col items-center z-10 w-full md:w-1/4">
+                    <div class="relative">
+                        <div class="absolute inset-0 bg-[#FFD100]/20 rounded-full animate-pulse-ring"></div>
+                        <div class="w-16 h-16 bg-white dark:bg-zinc-800 rounded-2xl border-2 border-[#FFD100] flex items-center justify-center shadow-lg animate-float">
+                            <svg class="w-8 h-8 text-[#FFD100]" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71L12 2z"/></svg>
+                        </div>
+                    </div>
+                    <h4 class="mt-4 font-bold">AI 思考</h4>
+                    <p class="text-[10px] text-slate-500 text-center mt-1">Claude / Antigravity<br>生成指令流</p>
+                </div>
+
+                <!-- Mobile Arrow 1-2 -->
+                <div class="md:hidden flex justify-center -my-6">
+                    <svg class="w-6 h-12">
+                        <path d="M 12 0 L 12 48" fill="none" stroke="#FFD100" stroke-width="2" stroke-dasharray="4 4" class="animate-flow" />
+                    </svg>
+                </div>
+
+                <!-- Node 2: Skill -->
+                <div class="flex flex-col items-center z-10 w-full md:w-1/4">
+                    <div class="w-16 h-16 bg-white dark:bg-zinc-800 rounded-2xl border border-slate-200 dark:border-zinc-700 flex items-center justify-center shadow-lg">
+                        <svg class="w-8 h-8 text-blue-500" fill="currentColor" viewBox="0 0 24 24"><path d="M14.25 10.5l-2.25 2.25 2.25 2.25M9.75 10.5l2.25 2.25-2.25 2.25M21 12A9 9 0 113 12a9 9 0 0118 0z"/></svg>
+                    </div>
+                    <h4 class="mt-4 font-bold">Skill 引擎</h4>
+                    <p class="text-[10px] text-slate-500 text-center mt-1">Python Wrapper<br>解析并转换逻辑</p>
+                </div>
+
+                <!-- Mobile Arrow 2-3 -->
+                <div class="md:hidden flex justify-center -my-6">
+                    <svg class="w-6 h-12">
+                        <path d="M 12 0 L 12 48" fill="none" stroke="#FFD100" stroke-width="2" stroke-dasharray="4 4" class="animate-flow" />
+                    </svg>
+                </div>
+
+                <!-- Node 3: Draft File -->
+                <div class="flex flex-col items-center z-10 w-full md:w-1/4">
+                    <div class="w-16 h-16 bg-white dark:bg-zinc-800 rounded-2xl border border-slate-200 dark:border-zinc-700 flex items-center justify-center shadow-lg">
+                        <svg class="w-8 h-8 text-orange-500" fill="currentColor" viewBox="0 0 24 24"><path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                    </div>
+                    <h4 class="mt-4 font-bold">剪映草稿</h4>
+                    <p class="text-[10px] text-slate-500 text-center mt-1">JSON 修改注入<br>无需官方 API</p>
+                </div>
+
+                <!-- Mobile Arrow 3-4 -->
+                <div class="md:hidden flex justify-center -my-6">
+                    <svg class="w-6 h-12">
+                        <path d="M 12 0 L 12 48" fill="none" stroke="#FFD100" stroke-width="2" stroke-dasharray="4 4" class="animate-flow" />
+                    </svg>
+                </div>
+
+                <!-- Node 4: Software -->
+                <div class="flex flex-col items-center z-10 w-full md:w-1/4">
+                    <div class="w-16 h-16 bg-black rounded-2xl border-2 border-[#FFD100] flex items-center justify-center shadow-lg">
+                        <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                    </div>
+                    <h4 class="mt-4 font-bold">剪映软件</h4>
+                    <p class="text-[10px] text-slate-500 text-center mt-1">自动识别工程<br>专业级精细控制</p>
+                </div>
+            </div>
+
+            <div class="mt-20 p-8 bg-zinc-50 dark:bg-zinc-900/50 rounded-3xl border border-slate-200 dark:border-zinc-800 text-center">
+                <p class="text-slate-600 dark:text-zinc-400 text-sm leading-relaxed max-w-3xl mx-auto">
+                    这套方案的核心在于 <b>“文件注入驱动”</b>。AI 不需要直接操作鼠标点击，而是直接操作剪映底层的草稿数据。这不仅绕过了软件交互的延迟，更实现了对时间轴、素材坐标、滤镜参数的 <b>100% 精确控制</b>。
+                </p>
+            </div>
         </section>
 
         <section id="quick-start" class="reveal py-24 border-t border-slate-100 dark:border-zinc-900">
