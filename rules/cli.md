@@ -59,3 +59,30 @@ The skill includes a GUI-based screen recorder for capturing user actions or tut
 # Auto-names files by timestamp and captures audio + events.
 python <SKILL_ROOT>/tools/recording/recorder.py
 ```
+## AI 自动化全流程工具 (Transcribe & Match)
+
+该工具支持从主视频/音频自动识别字幕，或直接利用已有 SRT 字幕，进行多源素材智能打标、语义对齐并组装剪映草稿。
+
+```bash
+# 场景 1：默认全流程 (视频输入)
+python <SKILL_ROOT>/examples/video_transcribe_and_match.py \
+    --video "主视频.mp4" \
+    --materials "./素材文件夹"
+
+# 场景 2：音频输入 (将音频作为主轨道)
+python <SKILL_ROOT>/examples/video_transcribe_and_match.py \
+    --video "配音文件.mp3" \
+    --materials "./素材库"
+
+# 场景 3：纯字幕匹配 (不需要视频/音频，直接根据 SRT 给素材对齐)
+python <SKILL_ROOT>/examples/video_transcribe_and_match.py \
+    --srt "mysubs.srt" \
+    --materials "./素材库"
+```
+
+### 参数说明：
+- `--video`: 主视频或主音频路径。提供此项时 AI 将自动完成语音转字幕。
+- `--srt`: 直接提供现有的字幕文件。若提供此参数，将跳过字幕识别步骤。
+- `--materials`: **(必填)** 素材来源，可传入多个文件夹或具体视频路径。
+- `--project`: 导出的剪映工程名称。
+- `--clear_cache`: `True/False`。强制刷新 AI 处理缓存。
