@@ -179,22 +179,23 @@ def format_srt_time(us: int) -> str:
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
 # --- 4. 复合片段辅助类 (Internal) ---
-class MockVideoMaterial:
+class MockVideoMaterial(draft.VideoMaterial):
     """绕过底层库物理文件检测的伪视频素材类"""
     def __init__(self, material_id, duration, name, width=1920, height=1080):
-        self._id = material_id
+        # 绕过父类 __init__ 的物理文件检测，直接手动赋值
+        self.material_id = material_id
         self.duration = duration
         self.material_name = name
         self.width = width
         self.height = height
         self.path = ""
-    
-    @property
-    def material_id(self): return self._id
+        self.material_type = "video"
+        self.local_material_id = ""
+        self.crop_settings = draft.CropSettings()
 
     def export_json(self):
         return {
-            "id": self._id,
+            "id": self.material_id,
             "type": "video",
             "material_name": self.material_name,
             "path": "",
@@ -233,6 +234,8 @@ class CompoundSegment(draft.VideoSegment):
         self.filters = []
         self.mask = None
         self.background_filling = None
+        self.transition = None
+        self.extra_material_refs = []
 
     def export_json(self):
         # 纯手工构建符合嵌套协议的 JSON
@@ -313,6 +316,7 @@ class JyProject:
         
         self.df = draft.DraftFolder(self.root)
         self.name = project_name
+        self._internal_colors = [] # 新增：用于追踪内部生成的色块
         
         # 如果提供了脚本实例（克隆模式），直接绑定
         if script_instance:
@@ -800,7 +804,7 @@ class JyProject:
         print(f"📥 Importing recorded video to jianying...")
         return self.add_media_safe(video_output, start_time, duration, track_name=track_name)
 
-    def add_web_code_vfx(self, html_code: str, start_time: Union[str, int] = None, duration: Union[str, int] = "5s", 
+    def add_web_code_vfx(self, html_code: str, start_time: Union[str, int] = None, duration: Union[str, int] = "5s",
                         track_name: str = "WebVfxTrack", **kwargs):
         """
         [顶级封装]: 直接传入 HTML 代码，自动保存并录制导入。
@@ -810,16 +814,44 @@ class JyProject:
         temp_dir = os.path.join(self.root, self.name, "temp_assets")
         os.makedirs(temp_dir, exist_ok=True)
         temp_html_path = os.path.join(temp_dir, f"vfx_{uuid.uuid4().hex[:8]}.html")
-        
+
         # 确保代码中包含基础样式以适配 1080P
         if "margin: 0" not in html_code:
             html_code = html_code.replace("<style>", "<style>body{margin:0;overflow:hidden;background:transparent;}")
-            
+
         with open(temp_html_path, 'w', encoding='utf-8') as f:
             f.write(html_code)
-            
+
         print(f"📝 Generated VFX HTML: {temp_html_path}")
         return self.add_web_asset_safe(temp_html_path, start_time, duration, track_name=track_name)
+
+    def add_color_strip(self, color_hex: str, duration: Union[str, int], track_name: str = "VideoTrack"):
+        """
+        [稳健版]: 通过生成物理单色图片来模拟剪映背景块。
+        """
+        import base64
+        # 极小的 1x1 PNG 图片数据 (黑/白)
+        PNG_DATA = {
+            "#000000": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+            "#FFFFFF": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hPwAIAgL/AOfn2v8AAAAASUVORK5CYII="
+        }
+
+        color_key = color_hex.upper()
+        if color_key not in PNG_DATA:
+            # 默认黑色
+            color_key = "#000000"
+
+        temp_dir = os.path.join(self.root, self.name, "temp_assets")
+        os.makedirs(temp_dir, exist_ok=True)
+        bg_path = os.path.join(temp_dir, f"bg_{color_key.replace('#','')}.png")
+
+        # 写入物理文件
+        with open(bg_path, "wb") as f:
+            f.write(base64.b64decode(PNG_DATA[color_key]))
+
+        print(f"🖼️ Generated Physical Background: {bg_path}")
+        # 使用最稳健的方式添加素材
+        return self.add_media_safe(bg_path, duration=duration, track_name=track_name)
 
     def add_media_safe(self, media_path: str, start_time: Union[str, int] = None, duration: Union[str, int] = None, 
                        track_name: str = None, source_start: Union[str, int] = 0, **kwargs):
