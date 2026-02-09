@@ -100,19 +100,19 @@ class VideoAutoEditor:
     def step1_recognize_subtitles(self):
         # 如果用户提供了 SRT 文件，直接使用
         if self.srt_input and os.path.exists(self.srt_input):
-            print(f"⏩ [Step 1] 使用已有字幕文件: {self.srt_input}")
+            print(f">>> [Step 1] 使用已有字幕文件: {self.srt_input}")
             self.temp_srt = self.srt_input
             return
 
         # 如果字幕已经生成在缓存中，跳过
         if os.path.exists(self.temp_srt):
-            print(f"⏩ [Step 1] 跳过：字幕缓存已存在: {self.temp_srt}")
+            print(f">>> [Step 1] 跳过：字幕缓存已存在: {self.temp_srt}")
             return
             
         if not self.main_input:
-            raise ValueError("❌ 未提供主视频/音频，无法生成字幕。请提供 --video 或 --srt 参数。")
+            raise ValueError("未提供主视频/音频，无法生成字幕。请提供 --video 或 --srt 参数。")
 
-        print(f"🚀 [Step 1] 正在识别音频中的字幕 (Gemini 3 Flash): {os.path.basename(self.main_input)}...")
+        print(f"[Step 1] 正在识别音频中的字幕 (Gemini 3 Flash): {os.path.basename(self.main_input)}...")
         
         # 优化后的提示词：要求精确对齐并去除多余输出
         prompt = (
@@ -138,7 +138,7 @@ class VideoAutoEditor:
         print(f"✅ 字幕已生成并清洗: {self.temp_srt}")
 
     def step2_analyze_materials(self, limit=None):
-        print(f"🚀 [Step 2] 汇总与分析素材库 (输入源: {len(self.material_inputs)})...")
+        print(f"[Step 2] 汇总与分析素材库 (输入源: {len(self.material_inputs)})...")
         
         # 1. 扫描所有输入源获取文件列表
         all_video_paths = []
@@ -156,7 +156,7 @@ class VideoAutoEditor:
         if limit:
             all_video_paths = all_video_paths[:limit]
             
-        print(f"   🔍 共发现 {len(all_video_paths)} 个视频文件。")
+        print(f"    - 共发现 {len(all_video_paths)} 个视频文件。")
 
         # 2. 加载现有缓存
         existing_results = []
@@ -178,15 +178,15 @@ class VideoAutoEditor:
             
             # 检查是否有缓存
             if path in cache_map:
-                print(f"   ⏩ 跳过已分析素材: {filename}")
+                print(f"    - 跳过已分析素材: {filename}")
                 final_results.append(cache_map[path])
                 continue
 
             if not os.path.exists(path):
-                print(f"   ⚠️ 文件未找到: {path}")
+                print(f"    - 文件未找到: {path}")
                 continue
                 
-            print(f"   🔍 正在分析新素材: {filename}...")
+            print(f"    - 正在分析新素材: {filename}...")
             # 获取时长
             try:
                 dur = draft.VideoMaterial(path).duration / 1000000.0
@@ -218,11 +218,11 @@ class VideoAutoEditor:
 
     def step3_ai_match(self, materials_data):
         if os.path.exists(self.matches_json):
-            print(f"⏩ [Step 3] 跳过：AI 语义匹配结果已存在: {self.matches_json}")
+            print(f">>> [Step 3] 跳过：AI 语义匹配结果已存在: {self.matches_json}")
             with open(self.matches_json, "r", encoding="utf-8") as f:
                 return json.load(f)
 
-        print("🧠 [Step 3] 正在让 AI 处理素材与字幕的语义匹配...")
+        print("[Step 3] 正在让 AI 处理素材与字幕的语义匹配...")
         
         with open(self.temp_srt, 'r', encoding='utf-8') as f:
             srt_content = f.read()
@@ -276,11 +276,11 @@ class VideoAutoEditor:
             print(f"✅ AI 匹配完成并已保存至缓存，共选定 {len(matches)} 个匹配点。")
             return matches
         except Exception as e:
-            print(f"❌ AI 匹配解析失败: {e}\n响应内容摘要: {resp[:200]}...")
+            print(f"AI 匹配解析失败: {e}\n响应内容摘要: {resp[:200]}...")
             return []
 
     def step4_assemble_project(self, materials_data, ai_matches):
-        print(f"🚀 [Step 4] 组装剪辑工程: {self.project_name}...")
+        print(f"[Step 4] 组装剪辑工程: {self.project_name}...")
         from jy_wrapper import JyProject
         
         # 加载并解析字幕以获取精确时间
@@ -352,7 +352,7 @@ class VideoAutoEditor:
             
             # 校验素材是否已被使用
             if m_id in used_materials:
-                print(f"   ⏩ 跳过重复使用的素材: ID {m_id} (Subtitle {idx})")
+                print(f"    - 跳过重复使用的素材: ID {m_id} (Subtitle {idx})")
                 continue
 
             if 1 <= idx <= len(subs_list) and m_id is not None and 0 <= m_id < len(materials_data):
@@ -368,7 +368,7 @@ class VideoAutoEditor:
                 try:
                     # 优先放在同一个轨道
                     project.add_media_safe(path, start_time=start_time, duration=duration, track_name=target_track)
-                    print(f"   ➕ [{start_time}] (长 {duration}) 匹配字幕 {idx}: {sub['text'][:10]}... -> {fname}")
+                    print(f"    [+] [{start_time}] (长 {duration}) 匹配字幕 {idx}: {sub['text'][:10]}... -> {fname}")
                     added_count += 1
                     used_materials.add(m_id) # 标记为已使用
                 except Exception as e:
@@ -377,10 +377,10 @@ class VideoAutoEditor:
                         project.add_media_safe(path, start_time=start_time, duration=duration, track_name=f"{target_track}_Alt")
                         added_count += 1
                     except:
-                        print(f"   ⚠️ 跳过冲突素材: {fname} at {start_time}")
+                        print(f"    [!] 跳过冲突素材: {fname} at {start_time}")
 
         project.save()
-        print(f"✅ 组装完成! 已精简匹配，共添加 {added_count} 个空镜素材。")
+        print(f"DONE: 组装完成! 已精简匹配，共添加 {added_count} 个空镜素材。")
 
 # ==========================================
 # 4. 执行入口 (Run)
@@ -428,7 +428,7 @@ if __name__ == "__main__":
         parser.error("❌ 必须提供 --video (主视频/音频) 或 --srt (直接提供字幕) 其中的至少一个。")
 
     if args.clear_cache:
-        print("🗑️ 清除现有缓存文件...")
+        print("[Cleaning] 清除现有缓存文件...")
         for cache_file in ["auto_material_analysis.json", "auto_ai_matches.json", "auto_generated_subs.srt"]:
             p = os.path.join(WORKSPACE_ROOT, cache_file)
             if os.path.exists(p) and (not srt_input or cache_file != os.path.basename(srt_input)):
