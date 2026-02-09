@@ -268,6 +268,31 @@ class CompoundSegment(draft.VideoSegment):
         if not hasattr(other, 'target_timerange'): return False
         return self.target_timerange.overlaps(other.target_timerange)
 
+def safe_tim(inp: Union[str, int, float]) -> int:
+    """
+    增强版时间解析器，支持:
+    1. 1h2m3s (底层库自带)
+    2. 00:00:10 (冒号分隔格式)
+    3. 10 (纯数字)
+    """
+    if isinstance(inp, (int, float)):
+        return int(inp * 1000000) if inp < 1000000 else int(inp)
+
+    if isinstance(inp, str) and ":" in inp:
+        try:
+            parts = inp.split(":")
+            if len(parts) == 3: # HH:MM:SS
+                h, m, s = map(float, parts)
+                return int((h * 3600 + m * 60 + s) * 1000000)
+            elif len(parts) == 2: # MM:SS
+                m, s = map(float, parts)
+                return int((m * 60 + s) * 1000000)
+        except:
+            pass
+
+    # 回退到原始 tim 函数
+    return tim(inp)
+
 # --- 5. High-Level Facade ---
 
 class JyProject:
