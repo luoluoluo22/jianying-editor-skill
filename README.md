@@ -74,6 +74,10 @@ git clone https://github.com/luoluoluo22/jianying-editor-skill.git skills/jianyi
 **✨ 创意：网页动效合成 (Web-to-Video)**
 > "帮我用网页写一个‘红心粒子爆炸’的动效，并导入到剪映。"
 
+**🎞️ 全自动：智能匹配 (Audio/SRT-to-Video)**
+> "分析文件夹 `饺子素材/`，根据字幕 `temp_subtitles.srt` 匹配画面，主轨道自动加黑底。"
+> "这有一段配音 `test_audio.mp3`，请自动转字幕并匹配素材库里的视频。"
+
 **📦 进阶：复合片段 (Nested Projects)**
 > "我想做一个嵌套剪辑：先生成一个带字幕的‘片头’子工程，然后把它作为一个复合片段插入到我的主视频教程中。"
 

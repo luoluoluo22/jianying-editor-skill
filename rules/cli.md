@@ -70,6 +70,7 @@ python <SKILL_ROOT>/examples/video_transcribe_and_match.py \
     --materials "./素材文件夹"
 
 # 场景 2：音频输入 (将音频作为主轨道)
+# 脚本将自动填充 1080P 黑色背景
 python <SKILL_ROOT>/examples/video_transcribe_and_match.py \
     --video "配音文件.mp3" \
     --materials "./素材库"
@@ -77,7 +78,8 @@ python <SKILL_ROOT>/examples/video_transcribe_and_match.py \
 # 场景 3：纯字幕匹配 (不需要视频/音频，直接根据 SRT 给素材对齐)
 python <SKILL_ROOT>/examples/video_transcribe_and_match.py \
     --srt "mysubs.srt" \
-    --materials "./素材库"
+    --materials "./素材库" \
+    --bg_image black
 ```
 
 ### 参数说明：
@@ -85,4 +87,11 @@ python <SKILL_ROOT>/examples/video_transcribe_and_match.py \
 - `--srt`: 直接提供现有的字幕文件。若提供此参数，将跳过字幕识别步骤。
 - `--materials`: **(必填)** 素材来源，可传入多个文件夹或具体视频路径。
 - `--project`: 导出的剪映工程名称。
+- `--bg_image`: **(可选)** 指定背景。支持 `white`, `black` 或具体图片路径。
 - `--clear_cache`: `True/False`。强制刷新 AI 处理缓存。
+- `--limit`: 限制处理素材的数量。
+
+### 智能背景逻辑：
+当主轨道没有传入视频文件时，脚本将自动识别并执行以下逻辑：
+1. 若指定了 `--bg_image`，使用指定颜色或图片。
+2. 若未指定，则**默认添加黑色背景色块**，确保生成的工程在剪映中打开时不是空白。
