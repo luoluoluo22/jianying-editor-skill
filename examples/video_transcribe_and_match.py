@@ -259,27 +259,31 @@ class VideoAutoEditor:
 
         project = JyProject(self.project_name, width=1080, height=1920)
         
+        has_main_video = False
         # 处理主轨道输入 (视频或音频)
         if self.main_input and os.path.exists(self.main_input):
             ext = self.main_input.lower().split('.')[-1]
             if ext in ['mp4', 'mov', 'mkv', 'avi']:
-                print(f"   🎥 添加主视频轨道: {os.path.basename(self.main_input)}")
+                print(f"   🎥 检测到主视频，将作为底图轨道")
                 project.add_media_safe(self.main_input)
+                has_main_video = True
             elif ext in ['mp3', 'wav', 'm4a', 'flac', 'aac']:
-                print(f"   🎵 添加主配音轨道: {os.path.basename(self.main_input)}")
+                print(f"   🎵 检测到主音频，将作为配音轨道")
                 project.add_media_safe(self.main_input, track_name="Main_Vocal")
-            else:
-                # 默认当作视频处理
-                project.add_media_safe(self.main_input)
         
         project.import_subtitles(self.temp_srt)
         
+        # 轨道优先级逻辑：
+        # 为了避免主轨道的“自动吸附”(Snapping)导致素材无法准确定位到时间点，
+        # 我们【统一使用辅轨道】来放置 B-Roll 素材，即便是音频驱动模式也是如此。
+        # 辅轨道支持自由定位，不会自动靠拢。
+        tracks_to_try = [f"Video_Track_{i}" for i in range(1, 10)]
+
         added_count = 0
         for match in ai_matches:
             idx = match.get("srt_idx")
             m_id = match.get("id")
             
-            # 优先通过 ID 匹配素材
             if idx is not None and 1 <= idx <= len(subs_list) and m_id is not None and 0 <= m_id < len(materials_data):
                 sub = subs_list[idx-1]
                 m_info = materials_data[m_id]
@@ -289,17 +293,23 @@ class VideoAutoEditor:
                 start_time = f"{sub['seconds']}s"
                 duration = f"{m_info['duration']}s"
                 
-                for i in range(1, 10):
-                    track = f"B-Roll_Auto_{i}"
+                # 寻找第一个不冲突的轨道
+                success = False
+                for t_name in tracks_to_try:
                     try:
-                        project.add_media_safe(path, start_time=start_time, duration=duration, track_name=track)
-                        print(f"   ➕ [{start_time}] 匹配第 {idx} 条字幕 -> {fname}")
+                        project.add_media_safe(path, start_time=start_time, duration=duration, track_name=t_name)
+                        track_display = t_name if t_name else "主轨道"
+                        print(f"   ➕ [{start_time}] 匹配第 {idx} 条字幕 -> {fname} (填充至: {track_display})")
                         added_count += 1
+                        success = True
                         break
-                    except: continue
+                    except Exception:
+                        continue
+                if not success:
+                    print(f"   ⚠️ [{start_time}] {fname} 轨道冲突，未能添加。")
 
         project.save()
-        print(f"✅ 全流程完成! 共添加 {added_count} 个空镜素材。")
+        print(f"✅ 全流程完成! 共添加 {added_count} 个素材片段。")
 
 # ==========================================
 # 4. 执行入口 (Run)

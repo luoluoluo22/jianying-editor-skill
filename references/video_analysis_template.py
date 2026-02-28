@@ -52,9 +52,9 @@ def analyze_video_to_storyboard(video_path, output_json="storyboard.json", custo
 1. **筛选素材**：挑选 8-12 个高光片段。
 2. **解说片段**：配上简短有力的解说词（必须用标点分段）。
 3. **原声片段**：人物对话或高阶情绪片段，text字段留空。
-严格输出为 JSON 数组：
+严格输出为 JSON 数组（注意：start 和 duration 必须使用秒为单位的浮点数，建议保留 2-3 位小数）：
 [
-  {"start": "HH:MM:SS", "duration": 5, "text": "解说词..."}
+  {"start": 10.25, "duration": 5.5, "text": "解说词..."}
 ]
 """
     prompt = custom_prompt or default_prompt

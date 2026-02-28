@@ -9,6 +9,19 @@ metadata:
 
 All operations are performed through the `JyProject` instance.
 
+## 创建项目 (Project Creation)
+
+在初始化 `JyProject` 时，请务必根据主视频素材的比例设置分辨率。**默认值为横屏 (1920x1080)**。
+
+```python
+# 默认：横屏 (16:9)
+project = JyProject("Horizontal_Project") 
+
+# 竖屏 (9:16)：必须在初始时指定，否则会有黑边
+project = JyProject("Portrait_Project", width=1080, height=1920)
+```
+
+
 ## Saving
 
 You **MUST** call `project.save()` at the end of your script. 

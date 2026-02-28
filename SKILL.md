@@ -13,7 +13,7 @@ Read the individual rule files for specific tasks and constraints:
 
 - [rules/setup.md](rules/setup.md) - **Mandatory** initialization code for all scripts.
 - [rules/core.md](rules/core.md) - Core operations: Saving, Exporting, and Draft management.
-- [rules/media.md](rules/media.md) - Importing Video, Audio, and Image assets.
+- [rules/media.md](rules/media.md) - Importing assets & **AI Video Analysis Optimization (30m/360p)**.
 - [rules/text.md](rules/text.md) - Adding Subtitles, Text, and Captions.
 - [rules/keyframes.md](rules/keyframes.md) - **Advanced**: Adding Keyframe animations.
 - [rules/effects.md](rules/effects.md) - Searching for and applying Filters, Effects, and Transitions.

@@ -314,9 +314,14 @@ class JyProject:
         self.df = draft.DraftFolder(self.root)
         self.name = project_name
         
+        # 是否显式指定了分辨率 (如果用户传入的不是默认值，则视为显式指定)
+        self._explicit_res = (width != 1920 or height != 1080)
+        self._first_video_resolved = False
+
         # 如果提供了脚本实例（克隆模式），直接绑定
         if script_instance:
             self.script = script_instance
+            self._explicit_res = True # 克隆通常不改变比例
             return
 
         # 支持打开现有项目或创建新项目
@@ -916,6 +921,23 @@ class JyProject:
             print(f"❌ Video Material Init Failed: {e}")
             return None
 
+        # --- 自适应分辨率逻辑 (Adaptive Resolution) ---
+        # 如果用户未显式指定分辨率，且这是第一个视频素材，则自动调整项目分辨率以匹配视频
+        if not self._explicit_res and not self._first_video_resolved:
+            try:
+                # 尝试获取素材分辨率 (pyJianYingDraft 的 VideoMaterial 通常有 width/height 属性)
+                if hasattr(mat, 'width') and hasattr(mat, 'height') and mat.width > 0:
+                    v_w, v_h = mat.width, mat.height
+                    # 如果检测到的比例与当前项目比例不一致，执行调整
+                    if v_w != self.script.width or v_h != self.script.height:
+                        print(f"✨ Auto-Adjusting project resolution to match first video: {v_w}x{v_h}")
+                        self.script.width = v_w
+                        self.script.height = v_h
+                self._first_video_resolved = True
+            except Exception as res_err:
+                print(f"⚠️ Resolution adaptive failed: {res_err}")
+                self._first_video_resolved = True # 即使失败也标记为已尝试，防止后续重复尝试
+        
         start_us = tim(start_time)
         src_start_us = tim(source_start)
         actual_duration = self._calculate_duration(duration, phys_duration - src_start_us)
