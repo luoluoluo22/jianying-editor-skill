@@ -13,6 +13,7 @@ import argparse
 import difflib
 import time
 import uuid
+import subprocess
 from typing import Union
 
 # Force UTF-8 output for Windows consoles to support Emojis
@@ -553,6 +554,7 @@ class JyProject:
                     "name": getattr(seg, 'name', os.path.basename(final_path) if final_path else (vfx_list[0]['name'] if vfx_list else "Untitled")),
                     "start": f"{d_start/1000000:.2f}s",
                     "duration": f"{d_dur/1000000:.2f}s",
+                    "src_start_us": getattr(seg, 'source_timerange', draft.Timerange(0,0)).start if hasattr(seg, 'source_timerange') else 0,
                     "path": final_path,
                     "status": "MISSING" if is_missing else "OK",
                     "vfx": vfx_list # 新增 VFX 字段
@@ -611,7 +613,37 @@ class JyProject:
         # 之前这里会打印完整的 JSON，在 Windows 控制台下容易导致编码冲突崩溃
         # 现在改为静默生成，只在看板前端展示
         print(f"✅ Report generated successfully: {report['report_summary']['missing_files']} files missing.")
+        
+        self.audit_timeline(track_details)
+        
         return report
+
+    def audit_timeline(self, track_details):
+        """
+        [健康检查]: 审计时间轴并打印可能的高频重复片段异常警告。
+        """
+        issues_found = False
+        # 记录特定起始时间截取的频次
+        mat_start_counts = {}
+        for td in track_details:
+            if td['type'] == 'video' or td['type'] == 'audio':
+                for seg in td['segments']:
+                    path = seg.get('path', '')
+                    src_start = seg.get('src_start_us', 0)
+                    if path:
+                        key = f"{path}@{src_start}"
+                        mat_start_counts[key] = mat_start_counts.get(key, 0) + 1
+
+        for key, count in mat_start_counts.items():
+            if count > 5:  # 假设超过5次相同源起点复用可能有问题
+                issues_found = True
+                path, start_us = key.rsplit('@', 1)
+                start_sec = int(start_us) / 1000000
+                print(f"⚠️ [AUDIT WARNING] 检测到高频率重复片段！文件: '{os.path.basename(path)}' 被从起点 {start_sec}s 截取了 {count} 次。")
+                print(f"  -> 请检查素材时长解析是否正确，是否存在静默归零或异常缩放到起点。")
+
+        if issues_found:
+            print("❗️ Timeline Audit highlighted potential duplication issues. Review the logs above.")
 
     def _force_activate_adjustments(self):
         """
@@ -953,6 +985,27 @@ class JyProject:
             print(f"❌ Video Material Init Failed: {e}")
             return None
 
+        # --- 强力时长解析与 FFprobe 兜底 ---
+        if not phys_duration or phys_duration <= 0:
+            print(f"⚠️ Metadata parser failed to detect duration for: {os.path.basename(media_path)}. Triggering ffprobe fallback...")
+            try:
+                result = subprocess.run(
+                    ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", media_path],
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=5
+                )
+                ff_dur = float(result.stdout.strip())
+                phys_duration = int(ff_dur * 1000000)
+                mat.duration = phys_duration
+                print(f"✅ ffprobe restored duration: {ff_dur:.2f}s")
+            except Exception as ef:
+                print(f"❌ ffprobe failed or not installed: {ef}")
+                if fallback_duration_us:
+                    print(f"⚠️ Overriding with explicit duration parameter: {fallback_duration_us/1000000:.2f}s")
+                    phys_duration = fallback_duration_us
+                    mat.duration = phys_duration
+                else:
+                    print(f"🚨 [CRITICAL ALERT] Could not resolve duration for {os.path.basename(media_path)}. Source clip might fail or silently collapse to 0s!")
+
         # --- 自适应分辨率逻辑 (Adaptive Resolution) ---
         # 如果用户未显式指定分辨率，且这是第一个视频素材，则自动调整项目分辨率以匹配视频
         if not self._explicit_res and not self._first_video_resolved:
@@ -969,10 +1022,16 @@ class JyProject:
             except Exception as res_err:
                 print(f"⚠️ Resolution adaptive failed: {res_err}")
                 self._first_video_resolved = True # 即使失败也标记为已尝试，防止后续重复尝试
-        
         start_us = tim(start_time)
         src_start_us = tim(source_start)
         actual_duration = self._calculate_duration(duration, phys_duration - src_start_us)
+
+        # 溢出警告 (Overflow Check)
+        if phys_duration > 0 and (src_start_us + actual_duration > phys_duration):
+            print(f"\n🚨 [CRITICAL WARNING] Clip overflow detected for: {os.path.basename(media_path)}")
+            print(f"   -> Required: Start={src_start_us/1000000:.2f}s, Duration={actual_duration/1000000:.2f}s, End={(src_start_us + actual_duration)/1000000:.2f}s")
+            print(f"   -> Available media length limit: {phys_duration/1000000:.2f}s")
+            print(f"   -> This may result in silent truncation or a broken timeline!\n")
 
         seg = draft.VideoSegment(
             mat,
