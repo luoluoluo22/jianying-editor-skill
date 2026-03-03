@@ -44,15 +44,13 @@ For heavy-duty automation scenarios (e.g., creating 100 personalized ads from 1 
 project = JyProject.from_template("Master_Template", "Target_Customer_A")
 ```
 
-### 2. Semantic Slot Replacement
-Use `replace_material_by_name` or `replace_material_by_path` to fill designated slots without breaking timberanges.
+### 2. Semantic Slot Replacement (Planned)
+> **注意**：以下方法尚未实现，计划中。目前请手动编辑 `draft_content.json` 或使用 `JyProject.from_template()` 后重新添加素材。
 
 ```python
-# Swaps an asset by its name or original placeholder filename
-project.replace_material_by_name("Intro_Slot", "C:/user/video.mp4")
-
-# Useful for fixing broken links globally
-project.reconnect_all_assets("D:/local_media_root")
+# [TODO] 这些 API 尚在开发中
+# project.replace_material_by_name("Intro_Slot", "C:/user/video.mp4")
+# project.reconnect_all_assets("D:/local_media_root")
 ```
 
 ## Automated Exporting

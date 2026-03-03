@@ -90,7 +90,8 @@ def build_pure_library():
                         
                         if category:
                             music_library[m_id]["categories"].add(category)
-            except: pass
+            except Exception as e:
+                print(f"⚠ Skipping project '{project_name}': {e}")
     else:
         print("❌ Projects root not found, only merging existing data.")
 

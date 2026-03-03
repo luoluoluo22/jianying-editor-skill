@@ -3,6 +3,7 @@ import os
 import json
 import csv
 import shutil
+import subprocess
 
 # 1. 路径定义
 LOCAL_APP_DATA = os.getenv('LOCALAPPDATA')
@@ -11,15 +12,20 @@ JY_CACHE_MUSIC = os.path.join(JY_USER_DATA, r"Cache\music")
 
 # Skill 根目录 (scripts 的上一级)
 SKILL_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# Sync to Project Root's assets folder, not inside .agent/skills
-PROJECT_ROOT = os.path.dirname(SKILL_ROOT) # Assuming SKILL_ROOT is .agent/skills/jianying-editor, go up 3 levels?
-# Better: Just assume we run from project root or find it relative to script
-# If script is in .agent/skills/jianying-editor/scripts/sync_jy_assets.py
-# SKILL_ROOT is .agent/skills/jianying-editor
-# We want f:\Desktop\kaifa\jianying-editor-skill\assets\jy_sync
-PROJECT_ROOT = os.path.abspath(os.path.join(SKILL_ROOT, "..", "..", "..")) 
-DEST_DIR = os.path.join(PROJECT_ROOT, "assets", "jy_sync")
+DEST_DIR = os.path.join(SKILL_ROOT, "assets", "jy_sync")
 DATA_DIR = os.path.join(SKILL_ROOT, "data")
+
+def get_duration_ffprobe(file_path):
+    """尝试用 ffprobe 获取音频时长(秒)，失败返回 0"""
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", file_path],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5
+        )
+        return round(float(result.stdout.strip()), 2)
+    except Exception:
+        return 0
 
 def sync_music_cache_robust():
     print(f"🔄 Starting Robust Sync from: {JY_CACHE_MUSIC}")
@@ -39,11 +45,10 @@ def sync_music_cache_robust():
         return
 
     if not file_list:
-        print("ℹ️ No cached music found in config.")
+        print("No cached music found in config.")
         return
 
     # 2. 尝试连接数据库获取元数据 (Best Effort)
-    # 收集所有 rp.db
     db_map = {} # mid -> {name, author}
     db_root = os.path.join(JY_USER_DATA, r"Cache\ressdk_db")
     if os.path.exists(db_root):
@@ -52,26 +57,40 @@ def sync_music_cache_robust():
                 try:
                     conn = sqlite3.connect(os.path.join(root, "rp.db"))
                     cursor = conn.cursor()
-                    # 尝试从 music 表读取
                     try:
                         cursor.execute("SELECT id, title, author FROM music")
                         for r in cursor.fetchall():
                             db_map[r[0]] = {"name": r[1], "author": r[2]}
-                    except: pass
+                    except Exception:
+                        pass
                     conn.close()
-                except: pass
+                except Exception:
+                    pass
     
-    # 3. 处理文件与同步
-    if os.path.exists(DEST_DIR):
-        shutil.rmtree(DEST_DIR)
-    os.makedirs(DEST_DIR)
+    # 3. 读取现有 CSV 索引以实现增量同步
+    csv_path = os.path.join(DATA_DIR, "jy_cached_audio.csv")
+    existing_ids = set()
+    existing_items = []
+    if os.path.exists(csv_path):
+        try:
+            with open(csv_path, 'r', encoding='utf-8', newline='') as f:
+                lines = [l for l in f.readlines() if not l.startswith("#")]
+                if lines:
+                    reader = csv.DictReader(lines)
+                    for row in reader:
+                        existing_items.append(row)
+                        existing_ids.add(row.get('identifier', ''))
+        except Exception as e:
+            print(f"⚠ Reading existing CSV failed: {e}")
 
-    synced_items = []
-    
-    print(f"📂 Found {len(file_list)} files in cache config.")
+    # 4. 处理文件与同步 (增量)
+    os.makedirs(DEST_DIR, exist_ok=True)
+    new_count = 0
+
+    print(f"📂 Found {len(file_list)} files in cache config. Existing: {len(existing_ids)} synced.")
 
     for item in file_list:
-        mid_hex = item.get('hex') # This might be the ID
+        mid_hex = item.get('hex')
         file_name = item.get('path')
         src_path = os.path.join(JY_CACHE_MUSIC, file_name)
         
@@ -87,13 +106,15 @@ def sync_music_cache_robust():
             author = meta['author']
             cat = "jy_internal"
         else:
-            # Fallback: 使用 Hex 前6位
             display_name = f"JY_Cached_{mid_hex[:6]}"
             author = "Unknown"
             cat = "jy_cached_unknown"
 
-        # 复制到 Skill 目录 (重命名为易读格式)
-        # 清理文件名中的非法字符
+        # 跳过已存在的 (增量)
+        if display_name in existing_ids:
+            continue
+
+        # 复制到 Skill 目录
         safe_name = "".join([c for c in display_name if c.isalnum() or c in (' ', '_', '-')]).strip()
         if not safe_name: safe_name = f"Music_{mid_hex[:6]}"
         
@@ -103,28 +124,35 @@ def sync_music_cache_robust():
         try:
             shutil.copy2(src_path, dest_path)
             
-            synced_items.append({
-                "identifier": display_name,         # 供搜索用
+            # 尝试获取真实时长
+            duration = get_duration_ffprobe(dest_path)
+            
+            existing_items.append({
+                "identifier": display_name,
                 "author": author,
-                "duration": "0", # TODO: Get exact duration if needed
-                "path": dest_path,                  # 这里直接指向我们同步过来的文件
+                "duration": str(duration),
+                "path": dest_path,
                 "category": cat
             })
-            print(f"   ✅ Synced: {display_name} -> {dest_filename}")
+            existing_ids.add(display_name)
+            new_count += 1
+            print(f"   + Synced: {display_name} ({duration}s)")
         except Exception as e:
-            print(f"   ⚠️ Copy failed for {file_name}: {e}")
+            print(f"   ⚠ Copy failed for {file_name}: {e}")
 
-    # 4. 保存 CSV 索引
-    if synced_items:
-        csv_path = os.path.join(DATA_DIR, "jy_cached_audio.csv")
-        with open(csv_path, 'w', encoding='utf-8', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=["identifier", "author", "duration", "path", "category"])
-            writer.writeheader()
-            writer.writerows(synced_items)
-        print(f"\n🎉 Sync Complete! {len(synced_items)} assets imported to {DEST_DIR}")
-        print(f"📋 Index saved to {csv_path}")
-    else:
-        print("❌ No valid assets synced.")
+    # 5. 保存 CSV 索引 (带引导注释)
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(csv_path, 'w', encoding='utf-8', newline='') as f:
+        f.write("# JianYing Cached Audio Assets (Physical files synced via sync_jy_assets.py)\n")
+        f.write("# AI Guidance: These files exist locally. Use 'path' column directly with add_audio_safe().\n")
+        f.write("# To refresh: run 'python scripts/sync_jy_assets.py'\n")
+        writer = csv.DictWriter(f, fieldnames=["identifier", "author", "duration", "path", "category"])
+        writer.writeheader()
+        writer.writerows(existing_items)
+    
+    print(f"\n🎉 Sync Complete! +{new_count} new, {len(existing_items)} total assets.")
+    print(f"📂 Assets dir: {DEST_DIR}")
+    print(f"📋 Index: {csv_path}")
 
 if __name__ == "__main__":
     sync_music_cache_robust()

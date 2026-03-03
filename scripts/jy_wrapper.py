@@ -222,12 +222,24 @@ class MockAudioMaterial(draft.AudioMaterial):
 
     def export_json(self):
         return {
+            "app_id": 1775,
+            "category_id": "6678556627852856076",
+            "category_name": "推荐音乐",
+            "check_flag": 1,
+            "copyright_limit_type": "none",
+            "duration": self.duration,
+            "effect_id": "",
+            "formula_id": "",
             "id": self.material_id,
-            "type": "music",
+            "intensifies_path": "",
+            "is_ugc": False,
+            "local_material_id": "",
+            "music_id": self.material_id,
             "name": self.name,
             "path": self.path,
-            "duration": self.duration,
-            "local_material_id": ""
+            "source_platform": 0,
+            "type": "music",
+            "wave_points": []
         }
 
 class CompoundSegment(draft.VideoSegment):
