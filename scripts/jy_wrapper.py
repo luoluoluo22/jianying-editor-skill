@@ -1119,11 +1119,21 @@ class JyProject:
         self.script.add_segment(seg, track_name)
         return seg
 
-    def add_cloud_music(self, music_id: str, name: str, duration_s: float, start_time: Union[str, int] = None, track_name: str = "BGM"):
+    def add_cloud_music(self, music_id: str, name: str, duration_s: float = None, start_time: Union[str, int] = None, track_name: str = "BGM"):
         """
         [封装核心]: 添加一个未下载的云端音乐引用。
         生成后用户需在剪映内点击该占位素材进行同步/下载。
+        Args:
+            duration_s: 音乐时长(秒)。如果不传，自动从 cloud_music_library.csv 按 music_id 查找。
         """
+        # --- 自动获取时长 (Auto Duration Lookup) ---
+        if duration_s is None:
+            duration_s = self._lookup_cloud_music_duration(music_id)
+            if duration_s is None:
+                print(f"[CRITICAL] Cannot determine duration for music_id={music_id}. "
+                      f"Please provide duration_s explicitly or ensure the ID exists in cloud_music_library.csv.")
+                return None
+
         if start_time is None:
             start_time = self.get_track_duration(track_name)
         self._ensure_track(draft.TrackType.audio, track_name)
@@ -1150,6 +1160,30 @@ class JyProject:
         )
         self.script.add_segment(seg, track_name)
         return seg
+
+    @staticmethod
+    def _lookup_cloud_music_duration(music_id: str):
+        """从 cloud_music_library.csv 按 music_id 查找时长(秒)，未找到返回 None。"""
+        import csv
+        csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "cloud_music_library.csv")
+        csv_path = os.path.normpath(csv_path)
+        if not os.path.exists(csv_path):
+            print(f"Cloud music library not found: {csv_path}")
+            return None
+        try:
+            with open(csv_path, 'r', encoding='utf-8') as f:
+                # 跳过注释行
+                lines = [line for line in f if not line.startswith('#')]
+            import io
+            reader = csv.DictReader(io.StringIO(''.join(lines)))
+            for row in reader:
+                if str(row.get('music_id', '')).strip() == str(music_id).strip():
+                    dur = float(row['duration_s'])
+                    print(f"Auto-resolved duration for '{row.get('title', music_id)}': {dur}s")
+                    return dur
+        except Exception as e:
+            print(f"Failed to lookup cloud music duration: {e}")
+        return None
 
     def add_cloud_sfx(self, effect_id: str, name: str, duration_s: float, start_time: Union[str, int] = None, track_name: str = "SFX"):
         """
@@ -1493,7 +1527,7 @@ class JyProject:
 
     def add_text_simple(self, text: str, start_time: Union[str, int] = None, duration: Union[str, int] = "3s", 
                         track_name: str = "TextTrack",
-                        font_size: float = 5.0,
+                        font_size: float = 5.0, # 锁定默认字号为 5.0
                         color_rgb: tuple = (1.0, 1.0, 1.0),
                         bold: bool = False,
                         align: int = 1,
@@ -1525,13 +1559,17 @@ class JyProject:
 
         self._ensure_track(draft.TrackType.text, track_name)
         
-        style = TextStyle(size=font_size, color=color_rgb, bold=bold, align=align, auto_wrapping=auto_wrapping)
+        # 默认样式：白字 + 黑色描边 (提高对比度，适配白底和各种背景)
+        # width 30 对应映射后的 0.06
+        border = TextBorder(color=(0.0, 0.0, 0.0), width=30.0)
+        style = TextStyle(size=font_size, color=color_rgb, bold=bold, align=align, 
+                          auto_wrapping=auto_wrapping)
         clip = ClipSettings(transform_y=transform_y)
         
         start_us = tim(start_time)
         dur_us = tim(duration)
         
-        seg = draft.TextSegment(text, trange(start_us, dur_us), style=style, clip_settings=clip)
+        seg = draft.TextSegment(text, trange(start_us, dur_us), style=style, clip_settings=clip, border=border)
         
         if anim_in:
             anim = _resolve_enum(TextIntro, anim_in)
@@ -1574,6 +1612,83 @@ class JyProject:
                     raise e
                     
         print(f"❌ Failed to add text after {max_retries} layering attempts.")
+
+    def _get_visual_width(self, text: str):
+        """计算字幕的视觉宽度：中文=1.0, 英文/符号=0.5"""
+        return sum(1.0 if ord(c) > 127 else 0.5 for c in text)
+
+    def add_subtitles_auto_split(self, text: str, start_time: Union[str, int], duration: Union[str, int], 
+                               track_name: str = "Subtitles", **kwargs):
+        """
+        [封装核心]: 遵循规范的高级字幕接口 (V2.1)。
+        规则: 
+        1. 按中文 '，' 和 '。' 切分。
+        2. 单条上限 27 个视觉字符 (中=1, 英=0.5)。
+        3. 自动根据视觉长度分配显示时长。
+        """
+        import re
+        # 1. 第一层切分 (By Punctuation)
+        raw_parts = re.split(r'[，。、\n]+', text)
+        parts = [p.strip() for p in raw_parts if p.strip()]
+        
+        # 2. 第二层切分 (By Visual Width: max 27.0)
+        final_parts = []
+        for p in parts:
+            while self._get_visual_width(p) > 27.0:
+                # 寻找 27.0 视觉宽度内的最佳切分位置
+                cut_idx = 0
+                current_width = 0.0
+                last_space_idx = -1
+                
+                for idx, char in enumerate(p):
+                    char_w = 1.0 if ord(char) > 127 else 0.5
+                    if current_width + char_w > 27.0:
+                        break
+                    current_width += char_w
+                    if char == ' ': last_space_idx = idx
+                    cut_idx = idx + 1
+                
+                # 词界感知：如果 27 字内有空格且空格之后不是紧跟标点，优先在空格处切
+                actual_cut = cut_idx
+                if last_space_idx > 10: # 空格不能太靠前
+                    actual_cut = last_space_idx
+                
+                final_parts.append(p[:actual_cut].strip())
+                p = p[actual_cut:].strip()
+                
+            if p: final_parts.append(p)
+            
+        if not final_parts: return []
+        
+        # 3. 时间分配 (Based on character weighting)
+        total_weight = sum(self._get_visual_width(p) for p in final_parts)
+        total_dur_us = tim(duration)
+        start_us = tim(start_time)
+        
+        added_segs = []
+        acc_dur_us = 0
+        for i, p in enumerate(final_parts):
+            clean_text = p.rstrip('，。！？')
+            
+            p_weight = self._get_visual_width(p)
+            p_dur_us = max(int((p_weight / total_weight) * total_dur_us), 400000)
+            
+            if i == len(final_parts) - 1:
+                p_dur_us = total_dur_us - acc_dur_us
+                
+            if p_dur_us <= 0: continue
+            
+            seg = self.add_text_simple(
+                clean_text, 
+                start_time=start_us + acc_dur_us, 
+                duration=p_dur_us, 
+                track_name=track_name, 
+                **kwargs
+            )
+            added_segs.append(seg)
+            acc_dur_us += p_dur_us
+            
+        return added_segs
         return None
 
 

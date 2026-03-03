@@ -54,6 +54,10 @@ This is the **preferred** way to use BGM to ensure copyright compliance and qual
 | 背景音乐 (BGM) | `cloud_music_library.csv` | `project.add_cloud_music(music_id=...)` |
 | 音乐音效 (SFX) | `cloud_sound_effects.csv` | `project.add_cloud_sfx(effect_id=...)`  |
 
+### 背景音乐音量规范
+> **[强制规则]** 当项目中同时存在 TTS 旁白和背景音乐时，**必须**将背景音乐的音量设置为 `volume=0.8`（即 80%），以确保人声清晰可辨。
+> 在 `add_cloud_music` / `add_audio_safe` 返回的 segment 上设置：`seg.volume = 0.8`
+
 #### 示例：添加云端音效
 ```python
 project.add_cloud_sfx(
@@ -78,3 +82,12 @@ When adding TTS, you MUST add corresponding subtitles.
 - **Track**: Place subtitles on a track named "Subtitles".
 - **Position**: Set `transform_y=-0.8`.
 - **Timing**: The start time and duration of the text clip MUST match the TTS audio segment exactly.
+
+### 字幕内容规范 (Subtitle Content Rules)
+> **[强制规则]** 为了保证移动端可读性：
+> 1. **切分逻辑**：单段文案必须以中文符号（`，` 或 `。`）为界限进行物理切分，形成多条字幕。
+> 2. **长度控制**：单条字幕字数**严禁超过 27 个视觉字符**（计分规则：中文字符 = 1, 英文字符/数字/半角符号 = 0.5）。
+> 3. **默认样式**：字号默认为 `5`。
+> 4. **禁止符号**：字幕内容中禁止出现中文句号 `。`，应以空格或切分替代。
+
+---
