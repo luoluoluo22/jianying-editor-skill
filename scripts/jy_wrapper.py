@@ -387,15 +387,30 @@ class JyProject:
                     pass
 
         if has_draft and not overwrite:
-            print(f"📖 Loading existing project: {project_name}")
+            print(f"Loading existing project: {project_name}")
             try:
                 self.script = self.df.load_template(project_name)
             except Exception as e:
-                print(f"❌ Load failed ({e}), forcing recreate...")
+                print(f"Load failed ({e}), forcing recreate...")
                 self.script = self.df.create_draft(project_name, width, height, allow_replace=True)
         else:
-            print(f"🆕 Creating new project: {project_name}")
-            self.script = self.df.create_draft(project_name, width, height, allow_replace=overwrite)
+            print(f"Creating new project: {project_name}")
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    self.script = self.df.create_draft(project_name, width, height, allow_replace=overwrite)
+                    break
+                except PermissionError as e:
+                    if attempt < max_retries - 1:
+                        print(f"\n{'='*50}")
+                        print(f"  [!] 剪映正在占用项目 '{project_name}' 的文件。")
+                        print(f"  请在剪映中关闭该草稿的编辑界面,")
+                        print(f"  然后返回剪映首页。(将在 5 秒后重试...)")
+                        print(f"{'='*50}\n")
+                        time.sleep(5)
+                    else:
+                        print(f"\n  剪映仍在占用文件，请先手动关闭剪映中的草稿后再重新运行脚本。")
+                        raise
 
     @staticmethod
     def from_template(template_name: str, new_project_name: str, drafts_root: str = None):
@@ -787,19 +802,24 @@ class JyProject:
 
             # 2. 花字补丁 (Styled Text)
             texts = materials.get("texts", [])
-            artist_cache = os.path.join(os.getenv('LOCALAPPDATA', ''), r'JianyingPro\User Data\Cache\artistEffect')
+            # 路径查找优先级: 1) Skill 本地资源 -> 2) 剪映缓存
+            skill_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            skill_artist = os.path.join(skill_root, "assets", "artistEffect")
+            jy_artist = os.path.join(os.getenv('LOCALAPPDATA', ''), "JianyingPro", "User Data", "Cache", "artistEffect")
             for mat in texts:
                 m_id = mat.get("id")
                 if m_id in self._cloud_text_patches:
                     style_id = self._cloud_text_patches[m_id]
                     try:
-                        # 解析本地 artistEffect 缓存路径
+                        # 解析 artistEffect 路径 (优先 Skill 本地资源)
                         effect_path = ""
-                        effect_dir = os.path.join(artist_cache, style_id)
-                        if os.path.isdir(effect_dir):
-                            subs = [d for d in os.listdir(effect_dir) if os.path.isdir(os.path.join(effect_dir, d))]
-                            if subs:
-                                effect_path = os.path.join(effect_dir, subs[0]).replace("\\", "/")
+                        for search_root in [skill_artist, jy_artist]:
+                            effect_dir = os.path.join(search_root, style_id)
+                            if os.path.isdir(effect_dir):
+                                subs = [d for d in os.listdir(effect_dir) if os.path.isdir(os.path.join(effect_dir, d))]
+                                if subs:
+                                    effect_path = os.path.join(effect_dir, subs[0]).replace("\\", "/")
+                                    break
 
                         c_json = json.loads(mat.get("content", "{}"))
                         text_content = c_json.get("text", "")
