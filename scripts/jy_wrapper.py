@@ -352,6 +352,7 @@ class JyProject:
         self.draft_dir = os.path.join(self.root, self.name)
         self._internal_colors = [] # 新增：用于追踪内部生成的色块
         self._cloud_audio_patches = {} # 新增：用于追踪云端音频映射 {dummy_path: {"id": id, "type": "music"|"sfx"}}
+        self._cloud_text_patches = {}   # 新增：用于追踪花字样式映射 {material_id: style_id}
         
         # 是否显式指定了分辨率 (如果用户传入的不是默认值，则视为显式指定)
         self._explicit_res = (width != 1920 or height != 1080)
@@ -588,7 +589,7 @@ class JyProject:
                     "name": getattr(seg, 'name', os.path.basename(final_path) if final_path else (vfx_list[0]['name'] if vfx_list else "Untitled")),
                     "start": f"{d_start/1000000:.2f}s",
                     "duration": f"{d_dur/1000000:.2f}s",
-                    "src_start_us": getattr(seg, 'source_timerange', draft.Timerange(0,0)).start if hasattr(seg, 'source_timerange') else 0,
+                    "src_start_us": seg.source_timerange.start if getattr(seg, 'source_timerange', None) else 0,
                     "path": final_path,
                     "status": "MISSING" if is_missing else "OK",
                     "vfx": vfx_list # 新增 VFX 字段
@@ -624,8 +625,8 @@ class JyProject:
         draft_path = os.path.join(self.root, self.name)
         try:
             self.script.save()
-            # 自动针对云端库进行协议补丁
-            self._patch_cloud_music_ids()
+            # 自动针对云端库进行协议补丁 (含 Music, SFX, 花字)
+            self._patch_cloud_material_ids()
             # 自动注入激活补丁，解决亮度/曝光等参数不即时生效的问题
             self._force_activate_adjustments()
             save_status = "SUCCESS"
@@ -750,13 +751,13 @@ class JyProject:
         except Exception as e:
             print(f"⚠️  Force activation failed: {e}")
 
-    def _patch_cloud_audio_ids(self):
+    def _patch_cloud_material_ids(self):
         """
-        [协议级补丁]: 扫描 JSON 并强行注入 music_id 或 effect_id。
-        因为本地库不原生支持添加不存在的云端资源。
+        [协议级补丁]: 扫描 JSON 并强行注入 music_id, effect_id 或 text_style_id。
         """
         import json
-        if not self._cloud_audio_patches: return
+        if not self._cloud_audio_patches and not self._cloud_text_patches:
+            return
 
         content_path = os.path.join(self.root, self.name, "draft_content.json")
         if not os.path.exists(content_path): return
@@ -766,7 +767,10 @@ class JyProject:
                 data = json.load(f)
 
             has_modified = False
-            audios = data.get("materials", {}).get("audios", [])
+            materials = data.get("materials", {})
+
+            # 1. 音频补丁 (BGM/SFX)
+            audios = materials.get("audios", [])
             for mat in audios:
                 path = mat.get("path", "")
                 for dummy_path, patch_info in self._cloud_audio_patches.items():
@@ -777,22 +781,65 @@ class JyProject:
                         else: # sfx
                             mat["effect_id"] = patch_info["id"]
                             mat["type"] = "sound"
-                        
-                        # 注入其他必要的占位符以欺骗剪映
-                        mat.setdefault("category_name", "推荐音乐")
+                        mat.setdefault("category_name", "推荐素材")
                         mat.setdefault("category_id", "6678556627852856076")
                         has_modified = True
-            
+
+            # 2. 花字补丁 (Styled Text)
+            texts = materials.get("texts", [])
+            artist_cache = os.path.join(os.getenv('LOCALAPPDATA', ''), r'JianyingPro\User Data\Cache\artistEffect')
+            for mat in texts:
+                m_id = mat.get("id")
+                if m_id in self._cloud_text_patches:
+                    style_id = self._cloud_text_patches[m_id]
+                    try:
+                        # 解析本地 artistEffect 缓存路径
+                        effect_path = ""
+                        effect_dir = os.path.join(artist_cache, style_id)
+                        if os.path.isdir(effect_dir):
+                            subs = [d for d in os.listdir(effect_dir) if os.path.isdir(os.path.join(effect_dir, d))]
+                            if subs:
+                                effect_path = os.path.join(effect_dir, subs[0]).replace("\\", "/")
+
+                        c_json = json.loads(mat.get("content", "{}"))
+                        text_content = c_json.get("text", "")
+                        text_len = len(text_content)
+                        # 为每个 style 注入 effectStyle，并修正字体/尺寸
+                        for sty in c_json.get("styles", []):
+                            sty["effectStyle"] = {
+                                "id": style_id,
+                                "path": effect_path
+                            }
+                            sty["size"] = 15.0
+                            sty["range"] = [0, text_len]
+                            sty.setdefault("font", {})
+                            if not sty["font"].get("path"):
+                                sty["font"]["path"] = "C:/Program Files/JianyingPro/5.9.0.11632/Resources/Font/SystemFont/zh-hans.ttf"
+                                sty["font"]["id"] = ""
+                        mat["content"] = json.dumps(c_json, ensure_ascii=False)
+                        # 修正材质级别的字段
+                        mat["type"] = "text"
+                        mat["font_size"] = 15.0
+                        mat["use_effect_default_color"] = True
+                        has_modified = True
+                        print(f"  [+] Styled text patched: {m_id} -> style {style_id} (path: {'OK' if effect_path else 'MISSING'})")
+                    except Exception as e:
+                        print(f"⚠️ Failed to patch text style for {m_id}: {e}")
+
             if has_modified:
                 with open(content_path, 'w', encoding='utf-8') as f:
                     json.dump(data, f, ensure_ascii=False)
-                print(f"📡 Cloud Audio Patched: Injected IDs for project '{self.name}'.")
+                print(f"📡 Cloud Materials Patched for project '{self.name}'.")
         except Exception as e:
             print(f"⚠️ Cloud patching failed: {e}")
 
+    def _patch_cloud_audio_ids(self):
+        # 兼容旧代码调用
+        self._patch_cloud_material_ids()
+
     def _patch_cloud_music_ids(self):
         # 兼容旧代码调用
-        self._patch_cloud_audio_ids()
+        self._patch_cloud_material_ids()
 
     def _update_root_meta_info(self, draft_path: str, duration_us: int = 0):
         """
@@ -1018,6 +1065,7 @@ class JyProject:
                     if end > max_end: max_end = end
                 return max_end
         return 0
+
 
     def add_audio_safe(self, media_path: str, start_time: Union[str, int] = None, duration: Union[str, int] = None, 
                        track_name: str = "AudioTrack", **kwargs):
@@ -1405,6 +1453,18 @@ class JyProject:
                 return phys_duration
             return req
         return phys_duration
+
+    def add_styled_text(self, text: str, style_id: str, start_time: Union[str, int] = None, duration: Union[str, int] = "3s", 
+                        track_name: str = "FlowerText", **kwargs):
+        """
+        [封装核心]: 添加花字 (Styled Text)。
+        使用此方法后，系统会在保存时注入 effect_id。
+        """
+        seg = self.add_text_simple(text, start_time=start_time, duration=duration, track_name=track_name, **kwargs)
+        if seg:
+            # 记录此素材需要补丁
+            self._cloud_text_patches[seg.material_id] = style_id
+        return seg
 
     def add_text_simple(self, text: str, start_time: Union[str, int] = None, duration: Union[str, int] = "3s", 
                         track_name: str = "TextTrack",

@@ -1,0 +1,7 @@
+# JianYing Cloud Text Styles Library (Flower Text IDs Scanned from Projects)
+# AI Guidance: Use 'style_id' in add_styled_text(). If matching name found, use ID.
+# Schema: style_id,name_hint,categories
+style_id,name_hint,categories
+7351316503771368713,红色花字1,3月3日
+7187739440347958589,红色花字2,3月3日
+7127669365423508767,红色花字3,3月3日

@@ -1,0 +1,10 @@
+{
+    "effect": {
+        "Link": [
+            {
+                "type": "TextStyle"
+            }
+        ]
+    },
+    "version": "13.9.0"
+}
