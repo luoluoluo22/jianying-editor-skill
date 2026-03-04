@@ -14,7 +14,7 @@ import difflib
 import time
 import uuid
 import subprocess
-from typing import Union
+from typing import Union, Optional
 
 # Force UTF-8 output for Windows consoles to support Emojis
 if sys.platform == 'win32' and hasattr(sys.stdout, 'reconfigure'):
@@ -956,7 +956,7 @@ class JyProject:
             print(f"⚠️ Failed to update root_meta_info: {e}")
 
     def add_web_asset_safe(self, html_path: str, start_time: Union[str, int] = None, duration: Union[str, int] = "5s", 
-                           track_name: str = "WebVfxTrack", **kwargs):
+                           track_name: str = "WebVfxTrack", output_dir: Optional[str] = None, **kwargs):
         """
         [封装核心]: 将一个 HTML 动效文件录制并导入剪映。
         
@@ -965,6 +965,7 @@ class JyProject:
             start_time: 在时间轴上的起始位置。如果为 None，自动追加到轨道末尾。
             duration: 持续时长。
             track_name: 目标轨道名称。
+            output_dir: 录制资产的存放目录。若为 None，则存放在草稿的 temp_assets 目录下。
         """
         if start_time is None:
             start_time = self.get_track_duration(track_name)
@@ -976,10 +977,11 @@ class JyProject:
             print(f"❌ HTML file not found: {html_path}")
             return None
 
-        # 1. 生成临时录制路径 (在草稿目录下的 temp 文件夹)
-        temp_dir = os.path.join(self.root, self.name, "temp_assets")
-        os.makedirs(temp_dir, exist_ok=True)
-        video_output = os.path.join(temp_dir, f"web_vfx_{int(time.time())}.webm")
+        # 1. 确定录制路径
+        if output_dir is None:
+            output_dir = os.path.join(self.root, self.name, "temp_assets")
+        os.makedirs(output_dir, exist_ok=True)
+        video_output = os.path.join(output_dir, f"web_vfx_{int(time.time())}.webm")
 
         # 2. 调用录制流程
         print(f"🎬 Recording web asset: {os.path.basename(html_path)} ...")
@@ -994,25 +996,28 @@ class JyProject:
         return self.add_media_safe(video_output, start_time, duration, track_name=track_name)
 
     def add_web_code_vfx(self, html_code: str, start_time: Union[str, int] = None, duration: Union[str, int] = "5s",
-                        track_name: str = "WebVfxTrack", **kwargs):
+                        track_name: str = "WebVfxTrack", output_dir: Optional[str] = None, **kwargs):
         """
         [顶级封装]: 直接传入 HTML 代码，自动保存并录制导入。
         Agent 只需生成网页代码，剩下的交给此方法。
+        Args:
+            output_dir: 网页与视频资产存放目录。若为 None，则存放在草稿的 temp_assets 目录下。
         """
         # 自动创建临时 HTML 文件
-        temp_dir = os.path.join(self.root, self.name, "temp_assets")
-        os.makedirs(temp_dir, exist_ok=True)
-        temp_html_path = os.path.join(temp_dir, f"vfx_{uuid.uuid4().hex[:8]}.html")
+        if output_dir is None:
+            output_dir = os.path.join(self.root, self.name, "temp_assets")
+        os.makedirs(output_dir, exist_ok=True)
+        temp_html_path = os.path.join(output_dir, f"vfx_{uuid.uuid4().hex[:8]}.html")
 
         # 确保代码中包含基础样式以适配 1080P
-        if "margin: 0" not in html_code:
+        if "<style>" not in html_code:
             html_code = html_code.replace("<style>", "<style>body{margin:0;overflow:hidden;background:transparent;}")
 
         with open(temp_html_path, 'w', encoding='utf-8') as f:
             f.write(html_code)
 
         print(f"📝 Generated VFX HTML: {temp_html_path}")
-        return self.add_web_asset_safe(temp_html_path, start_time, duration, track_name=track_name)
+        return self.add_web_asset_safe(temp_html_path, start_time, duration, track_name=track_name, output_dir=output_dir)
 
     def add_color_strip(self, color_hex: str, duration: Union[str, int], track_name: str = "VideoTrack"):
         """
@@ -1062,7 +1067,7 @@ class JyProject:
 
         # 简单的后缀判断
         ext = os.path.splitext(media_path)[1].lower()
-        if ext in ['.mp3', '.wav', '.aac', '.flac', '.m4a']:
+        if ext in ['.mp3', '.wav', '.aac', '.flac', '.m4a', '.ogg']:
             return self.add_audio_safe(media_path, start_time, duration, track_name or "AudioTrack")
         
         return self._add_video_safe(media_path, start_time, duration, track_name or "VideoTrack", source_start=source_start)
@@ -1091,6 +1096,63 @@ class JyProject:
                 return max_end
         return 0
 
+
+    def add_tts_intelligent(self, text: str, speaker: str = "zh_male_huoli", start_time: Union[str, int] = None, track_name: str = "AudioTrack"):
+        """
+        [集成核心]: 智能通用 TTS 接口。
+        1. 自动生成语音: 优先调用剪映 SAMI 直连 (高品质)，失败则回退微软 Edge-TTS (稳定)。
+        2. 自动配置探测: 通过集成脚本嗅探本地剪映 device_id 与 iid，实现零配置即用。
+        3. 自动同步导入: 生成音频后自动添加到指定轨道。
+        
+        Args:
+            text: 语音文案。
+            speaker: 剪映音色 ID (如 zh_male_huoli, zh_female_xiaopengyou)。
+            start_time: 插入时间轴位置。
+            track_name: 目标轨道名称。
+        """
+        import asyncio
+        import uuid
+        try:
+            from universal_tts import generate_voice
+        except ImportError:
+            # 兼容性处理：如果 universal_tts 不在 path 中，尝试从同级目录加载
+            sys.path.append(os.path.dirname(__file__))
+            from universal_tts import generate_voice
+
+        if start_time is None:
+            start_time = self.get_track_duration(track_name)
+            
+        temp_dir = os.path.join(self.root, self.name, "temp_assets")
+        os.makedirs(temp_dir, exist_ok=True)
+        # 生成唯一文件名 (优先 ogg，兼容通用性)
+        output_file = os.path.join(temp_dir, f"tts_{uuid.uuid4().hex[:8]}.ogg")
+        
+        print(f"🎙️ Running Intelligent TTS (Auto-Fallback enabled): '{text[:30]}...'")
+        
+        # 兼容当前脚本的异步调用环境 (检测当前是否有 running loop)
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # 如果在异步环境运行，建议用户直接使用异步 generate_voice
+                print("⚠️ Warning: Detected running event loop. Synchronous wrapper might block.")
+                # 这里我们依然开启一个临时线程执行或尝试嵌套 (视具体 IDE 环境而定)
+                # 简单起见，技能脚本通常是顺序执行的，我们创建一个新 loop 即可
+                actual_path = asyncio.run(generate_voice(text, output_file, speaker))
+            else:
+                actual_path = loop.run_until_complete(generate_voice(text, output_file, speaker))
+        except RuntimeError:
+            # 没有 Loop 时
+            actual_path = asyncio.run(generate_voice(text, output_file, speaker))
+        except Exception as e:
+            print(f"❌ Critical TTS Error: {e}")
+            return None
+        
+        if not actual_path or not os.path.exists(actual_path):
+            print("❌ TTS Generation failed (All providers).")
+            return None
+            
+        print(f"✅ TTS Success: {os.path.basename(actual_path)}")
+        return self.add_media_safe(actual_path, start_time, track_name=track_name)
 
     def add_audio_safe(self, media_path: str, start_time: Union[str, int] = None, duration: Union[str, int] = None, 
                        track_name: str = "AudioTrack", **kwargs):
@@ -1566,8 +1628,8 @@ class JyProject:
                           auto_wrapping=auto_wrapping)
         clip = ClipSettings(transform_y=transform_y)
         
-        start_us = tim(start_time)
-        dur_us = tim(duration)
+        start_us = safe_tim(start_time)
+        dur_us = safe_tim(duration)
         
         seg = draft.TextSegment(text, trange(start_us, dur_us), style=style, clip_settings=clip, border=border)
         
@@ -1621,62 +1683,76 @@ class JyProject:
                                track_name: str = "Subtitles", **kwargs):
         """
         [封装核心]: 遵循规范的高级字幕接口 (V2.1)。
-        规则: 
-        1. 按中文 '，' 和 '。' 切分。
-        2. 单条上限 27 个视觉字符 (中=1, 英=0.5)。
+        1. 按中文 '，' '。' '！' '？' 等切分。
+        2. 单条上限 27 个视觉字符。
         3. 自动根据视觉长度分配显示时长。
         """
         import re
-        # 1. 第一层切分 (By Punctuation)
-        raw_parts = re.split(r'[，。、\n]+', text)
-        parts = [p.strip() for p in raw_parts if p.strip()]
+        input_text = text.strip()
+        if not input_text: return []
+
+        # 1. 分句：按标点符号切分，保留分隔符
+        raw_parts = re.split(r'([，。！？、\n\r]+)', input_text)
         
-        # 2. 第二层切分 (By Visual Width: max 27.0)
+        # 重新组合：将文本与其后的标点合并
+        sentences = []
+        i = 0
+        while i < len(raw_parts):
+            part = raw_parts[i]
+            if i + 1 < len(raw_parts):
+                # 检查下一项是否是标点
+                if re.match(r'[，。！？、\n\r]+', raw_parts[i+1]):
+                    part += raw_parts[i+1]
+                    i += 1
+            if part.strip():
+                sentences.append(part.strip())
+            i += 1
+
+        # 2. 对过长的句子进行强制切分
         final_parts = []
-        for p in parts:
-            while self._get_visual_width(p) > 27.0:
-                # 寻找 27.0 视觉宽度内的最佳切分位置
+        for s in sentences:
+            temp_s = s
+            while self._get_visual_width(temp_s) > 27.0:
                 cut_idx = 0
                 current_width = 0.0
-                last_space_idx = -1
-                
-                for idx, char in enumerate(p):
+                for idx, char in enumerate(temp_s):
                     char_w = 1.0 if ord(char) > 127 else 0.5
                     if current_width + char_w > 27.0:
                         break
                     current_width += char_w
-                    if char == ' ': last_space_idx = idx
                     cut_idx = idx + 1
                 
-                # 词界感知：如果 27 字内有空格且空格之后不是紧跟标点，优先在空格处切
-                actual_cut = cut_idx
-                if last_space_idx > 10: # 空格不能太靠前
-                    actual_cut = last_space_idx
-                
-                final_parts.append(p[:actual_cut].strip())
-                p = p[actual_cut:].strip()
-                
-            if p: final_parts.append(p)
+                if cut_idx == 0: cut_idx = 1
+                final_parts.append(temp_s[:cut_idx].strip())
+                temp_s = temp_s[cut_idx:].strip()
+            
+            if temp_s:
+                final_parts.append(temp_s)
             
         if not final_parts: return []
         
-        # 3. 时间分配 (Based on character weighting)
+        # 3. 时间分配
         total_weight = sum(self._get_visual_width(p) for p in final_parts)
-        total_dur_us = tim(duration)
-        start_us = tim(start_time)
+        if total_weight == 0: return []
+        
+        total_dur_us = safe_tim(duration)
+        start_us = safe_tim(start_time)
         
         added_segs = []
         acc_dur_us = 0
         for i, p in enumerate(final_parts):
-            clean_text = p.rstrip('，。！？')
-            
+            # 权重计算包含标点，以反映语音中的自然停顿
             p_weight = self._get_visual_width(p)
-            p_dur_us = max(int((p_weight / total_weight) * total_dur_us), 400000)
+            p_dur_us = int((p_weight / total_weight) * total_dur_us)
             
+            # 最后一个片段填满剩余时间
             if i == len(final_parts) - 1:
                 p_dur_us = total_dur_us - acc_dur_us
                 
             if p_dur_us <= 0: continue
+            
+            # 实际显示时剔除末尾标点符号，保持短视频字幕一贯的“无标点”风格
+            clean_text = p.rstrip('，。！？、\n\r ')
             
             seg = self.add_text_simple(
                 clean_text, 

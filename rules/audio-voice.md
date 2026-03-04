@@ -10,23 +10,30 @@ metadata:
 Use these rules to provide a rich auditory experience, including AI narration and appropriate background music.
 
 ## 1. Text-to-Speech (TTS)
-Always use `edge-tts` for high-quality, natural-sounding voiceovers.
+优先使用智配音接口 `project.add_tts_intelligent()`。它具备以下超能力：
+- **剪映直连**：优先使用剪映 SAMI 引擎（高质量、丰富剪映独家音色）。
+- **零配置**：自动嗅探本地剪映 `device_id` 和 `iid`，无需抓包。
+- **自动兜底**：若剪映网络不通，自动回退到微软 `edge-tts`。
+- **简化流程**：一行代码完成“生成、测量、导入”全过程。
 
-### Workflow:
-1.  **Generate Audio**: Create a temporary Python script or use the `edge-tts` CLI.
-    *   Synthesizer: `edge-tts`
-    *   Voice: `zh-CN-XiaoxiaoNeural` (standard) or `zh-CN-YunxiNeural` (energetic).
-2.  **Import to Project**: Use `project.add_audio_safe()`.
-3.  **Syncing**: Use `ffprobe` to get the exact duration of the generated `.mp3` to ensure perfect timing with visual clips.
+### 推荐音色 (Speaker IDs):
+- **阳光/活力**: `zh_male_huoli` (默认)
+- **小孩**: `zh_female_xiaopengyou`
+- **熊二**: `zh_male_xionger_stream_gpu`
+- **成熟女性**: `zh_female_shunv`
 
+### 使用方法:
 ```python
-# Implementation Example
-import asyncio
-import edge_tts
-async def generate_voice(text, output_path):
-    communicate = edge_tts.Communicate(text, "zh-CN-XiaoxiaoNeural")
-    await communicate.save(output_path)
+# 1. 简单生成
+seg = project.add_tts_intelligent("你好，我是全自动剪辑助手。", speaker="zh_male_huoli")
+
+# 2. 结合字幕 (音画同步)
+text = "欢迎来到 AI 剪辑教程。"
+duration = seg.target_timerange.duration / 1000000 # 获取精准音频时长
+project.add_subtitles_auto_split(text, start_time=seg.target_timerange.start, duration=duration)
 ```
+
+---
 
 ## 2. JianYing Internal BGM (Native Integration)
 This is the **preferred** way to use BGM to ensure copyright compliance and quality.
@@ -55,8 +62,8 @@ This is the **preferred** way to use BGM to ensure copyright compliance and qual
 | 音乐音效 (SFX) | `cloud_sound_effects.csv` | `project.add_cloud_sfx(effect_id=...)`  |
 
 ### 背景音乐音量规范
-> **[强制规则]** 当项目中同时存在 TTS 旁白和背景音乐时，**必须**将背景音乐的音量设置为 `volume=0.8`（即 80%），以确保人声清晰可辨。
-> 在 `add_cloud_music` / `add_audio_safe` 返回的 segment 上设置：`seg.volume = 0.8`
+> **[强制规则]** 当项目中同时存在 TTS 旁白和背景音乐时，**必须**将背景音乐的音量设置为 `volume=0.6`（即 60%），以确保人声清晰可辨。
+> 在 `add_cloud_music` / `add_audio_safe` 返回的 segment 上设置：`seg.volume = 0.6`
 
 #### 示例：添加云端音效
 ```python
