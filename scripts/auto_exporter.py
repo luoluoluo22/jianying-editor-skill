@@ -1,48 +1,85 @@
-import sys
-import os
 import argparse
+import json
+import os
 
 from utils.env_setup import setup_env
+from utils.logging_utils import setup_logger
+
+
 setup_env()
+logger = setup_logger("auto_exporter")
 
-import pyJianYingDraft as draft
+import pyJianYingDraft as draft  # noqa: E402
 
-def auto_export(draft_name, output_path, resolution=None, framerate=None):
+
+def auto_export(draft_name: str, output_path: str, resolution: str = None, framerate: str = None) -> tuple[int, dict]:
+    res_map = {
+        "480": draft.ExportResolution.RES_480P,
+        "720": draft.ExportResolution.RES_720P,
+        "1080": draft.ExportResolution.RES_1080P,
+        "2K": draft.ExportResolution.RES_2K,
+        "4K": draft.ExportResolution.RES_4K,
+        "8K": draft.ExportResolution.RES_8K,
+    }
+    fr_map = {
+        "24": draft.ExportFramerate.FR_24,
+        "25": draft.ExportFramerate.FR_25,
+        "30": draft.ExportFramerate.FR_30,
+        "50": draft.ExportFramerate.FR_50,
+        "60": draft.ExportFramerate.FR_60,
+    }
+
+    target_res = res_map.get(str(resolution).upper() if resolution else "")
+    target_fr = fr_map.get(str(framerate) if framerate else "")
+
+    if resolution and target_res is None:
+        logger.error("Unsupported resolution: %s (allowed: %s)", resolution, ", ".join(res_map.keys()))
+        return 2, {"ok": False, "reason": "invalid_resolution", "resolution": resolution}
+    if framerate and target_fr is None:
+        logger.error("Unsupported framerate: %s (allowed: %s)", framerate, ", ".join(fr_map.keys()))
+        return 2, {"ok": False, "reason": "invalid_framerate", "fps": framerate}
+
     try:
+        output_dir = os.path.dirname(os.path.abspath(output_path))
+        if output_dir and not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
+
+        logger.info("Preparing export: draft=%s", draft_name)
         ctrl = draft.JianyingController()
-        res_map = {
-            "480": draft.ExportResolution.RES_480P,
-            "720": draft.ExportResolution.RES_720P,
-            "1080": draft.ExportResolution.RES_1080P,
-            "2K": draft.ExportResolution.RES_2K,
-            "4K": draft.ExportResolution.RES_4K
-        }
-        fr_map = {
-            "24": draft.ExportFramerate.FR_24,
-            "25": draft.ExportFramerate.FR_25,
-            "30": draft.ExportFramerate.FR_30,
-            "50": draft.ExportFramerate.FR_50,
-            "60": draft.ExportFramerate.FR_60
-        }
-        
-        target_res = res_map.get(resolution)
-        target_fr = fr_map.get(framerate)
-        
-        print(f"准备导出草稿: {draft_name}")
         ctrl.export_draft(draft_name, output_path, resolution=target_res, framerate=target_fr)
-        print(f"导出成功！文件位置: {output_path}")
+        logger.info("Export succeeded: %s", output_path)
+        return 0, {
+            "ok": True,
+            "draft": draft_name,
+            "output": output_path,
+            "resolution": resolution,
+            "fps": framerate,
+        }
     except Exception as e:
-        print(f"导出失败: {str(e)}")
-        print("-" * 40)
-        print("💡 建议：如果自动导出持续失败，请尝试【手动重启剪映程序】并确保其处于首页或编辑状态后再运行。")
-        print("-" * 40)
-        sys.exit(1)
+        logger.error("Export failed: %s", e)
+        logger.error("Hint: restart JianYing and keep it on Home/Edit page before retry.")
+        return 1, {
+            "ok": False,
+            "reason": "export_failed",
+            "error": str(e),
+            "draft": draft_name,
+            "output": output_path,
+        }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Headless draft exporter")
+    parser.add_argument("name", help="Draft name")
+    parser.add_argument("output", help="Output mp4 path")
+    parser.add_argument("--res", help="Resolution: 480/720/1080/2K/4K/8K")
+    parser.add_argument("--fps", help="Framerate: 24/25/30/50/60")
+    parser.add_argument("--json", action="store_true", help="Output JSON summary")
+    args = parser.parse_args()
+    code, summary = auto_export(args.name, args.output, args.res, args.fps)
+    if args.json:
+        print(json.dumps(summary, ensure_ascii=False))
+    return code
+
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("name")
-    parser.add_argument("output")
-    parser.add_argument("--res")
-    parser.add_argument("--fps")
-    args = parser.parse_args()
-    auto_export(args.name, args.output, args.res, args.fps)
+    raise SystemExit(main())

@@ -1,69 +1,116 @@
+import argparse
+import json
 import os
+import subprocess
 import sys
 
-"""
-API Validator for JianYing Editor Skill
-用于验证当前环境和 JyProject API 是否能够正常运行。
-"""
+from utils.logging_utils import setup_logger
 
-# 环境初始化
-current_dir = os.path.dirname(os.path.abspath(__file__))
-if current_dir not in sys.path:
-    sys.path.insert(0, current_dir)
 
-try:
-    from jy_wrapper import JyProject
-except ImportError:
-    print("❌ Failed to load jy_wrapper.")
-    sys.exit(1)
+logger = setup_logger("api_validator")
 
-def check_ffprobe():
-    import subprocess
+
+def _bootstrap_import():
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    if current_dir not in sys.path:
+        sys.path.insert(0, current_dir)
     try:
-        res = subprocess.run(["ffprobe", "-version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        from jy_wrapper import JyProject
+        return JyProject
+    except ImportError as e:
+        logger.error("Failed to load jy_wrapper: %s", e)
+        return None
+
+
+def check_ffprobe() -> bool:
+    try:
+        res = subprocess.run(
+            ["ffprobe", "-version"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=5,
+        )
         if res.returncode == 0:
-            print("✅ FFprobe is installed and available in PATH.")
+            logger.info("FFprobe is installed and available in PATH.")
             return True
     except FileNotFoundError:
-        print("⚠️ Warning: FFprobe not found in PATH. TS files or missing metadata might fail to resolve duration.")
+        pass
+    except Exception as e:
+        logger.warning("FFprobe check failed: %s", e)
+    logger.warning("FFprobe not found in PATH. Duration fallback may fail for some files.")
     return False
 
-def run_diagnostic():
-    print("🔍 启动 JianYing Skill 内部综合诊断...")
-    
-    check_ffprobe()
 
-    skill_root = os.path.dirname(current_dir)
-    assets_dir = os.path.join(skill_root, "assets")
-    video_path = os.path.join(assets_dir, "video.mp4")
+def run_diagnostic(project_name: str, video_path: str, strict: bool = False) -> tuple[int, dict]:
+    JyProject = _bootstrap_import()
+    if JyProject is None:
+        return 1, {"ok": False, "reason": "import_failed", "project": project_name, "video": video_path}
 
-    if not os.path.exists(video_path):
-        print(f"⚠️ Warning: Test asset missing at {video_path}")
+    logger.info("Starting JianYing skill diagnostic...")
+    ffprobe_ok = check_ffprobe()
+    if strict and not ffprobe_ok:
+        return 2, {"ok": False, "reason": "ffprobe_missing", "project": project_name, "video": video_path}
+
+    video_exists = os.path.exists(video_path)
+    if not video_exists:
+        logger.warning("Test asset missing at: %s", video_path)
+        if strict:
+            return 2, {"ok": False, "reason": "video_missing", "project": project_name, "video": video_path}
 
     try:
-        project = JyProject("Diagnostic_Test", overwrite=True)
-        # 测试 API V2 的自动追加能力
+        project = JyProject(project_name, overwrite=True)
         seg1 = project.add_media_safe(video_path)
-        
-        # 测试防呆设计: 重复引用并设置异常长度
         project.add_text_simple("诊断测试: 检查溢出警告")
-        if seg1 and hasattr(seg1, 'material_instance') and hasattr(seg1.material_instance, 'duration'):
+
+        if seg1 and hasattr(seg1, "material_instance") and hasattr(seg1.material_instance, "duration"):
             dur_us = seg1.material_instance.duration
-            print(f"[*] Base video duration is: {dur_us/1000000:.2f}s")
-            # 故意传入一个超过上限的时长
-            project.add_media_safe(video_path, source_start=0, duration=f"{(dur_us/1000000) + 10}s")
-            
-        # 测试审计(连续添加5个会导致高频复发警告)
-        print("[*] Testing Timeline Audit (should produce warning)...")
-        for i in range(6):
+            logger.info("Base video duration: %.2fs", dur_us / 1_000_000)
+            project.add_media_safe(video_path, source_start=0, duration=f"{(dur_us / 1_000_000) + 10}s")
+
+        logger.info("Testing Timeline Audit warning path...")
+        for _ in range(6):
             project.add_media_safe(video_path, source_start="0s", duration="1s")
-            
-        project.save()
-        print("\n✅ API 诊断并输出报告通过（请检查上方是否正确输出了 Overflow 和 Audit 警告）！")
+
+        save_result = project.save()
+        logger.info("Diagnostic completed. Check above logs for warnings.")
+        return 0, {
+            "ok": True,
+            "project": project_name,
+            "video": video_path,
+            "ffprobe_ok": ffprobe_ok,
+            "video_exists": video_exists,
+            "save_result": save_result,
+        }
     except Exception as e:
-        print(f"\n❌ API 诊断失败: {e}")
-        sys.exit(1)
+        logger.exception("Diagnostic failed: %s", e)
+        return 1, {
+            "ok": False,
+            "reason": "exception",
+            "error": str(e),
+            "project": project_name,
+            "video": video_path,
+            "ffprobe_ok": ffprobe_ok,
+            "video_exists": video_exists,
+        }
+
+
+def main() -> int:
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    skill_root = os.path.dirname(current_dir)
+    default_video = os.path.join(skill_root, "assets", "video.mp4")
+
+    parser = argparse.ArgumentParser(description="JianYing Skill API diagnostic")
+    parser.add_argument("--project", default="Diagnostic_Test", help="Diagnostic draft name")
+    parser.add_argument("--video", default=default_video, help="Path to test video")
+    parser.add_argument("--strict", action="store_true", help="Fail if ffprobe or test asset is missing")
+    parser.add_argument("--json", action="store_true", help="Print machine-readable JSON summary")
+    args = parser.parse_args()
+    code, summary = run_diagnostic(args.project, args.video, strict=args.strict)
+    if args.json:
+        print(json.dumps(summary, ensure_ascii=False))
+    return code
+
 
 if __name__ == "__main__":
-    run_diagnostic()
-
+    raise SystemExit(main())

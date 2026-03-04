@@ -4,11 +4,15 @@ import json
 import requests
 import re
 import argparse
+import ipaddress
+from urllib.parse import urlparse
 from typing import Optional, Dict
 
 SKILL_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORKSPACE_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(SKILL_ROOT)))
 CACHE_DIR = os.path.join(WORKSPACE_ROOT, "cloud_cache")
+MAX_DOWNLOAD_BYTES = int(float(os.getenv("JY_CLOUD_MAX_MB", "512")) * 1024 * 1024)
+ALLOWED_SCHEMES = {"http", "https"}
 
 class CloudManager:
     def __init__(self):
@@ -113,6 +117,45 @@ class CloudManager:
                     return url
         return None
 
+    def _is_safe_download_url(self, url: str) -> bool:
+        try:
+            parsed = urlparse(url)
+            if parsed.scheme.lower() not in ALLOWED_SCHEMES:
+                return False
+            host = (parsed.hostname or "").strip().lower()
+            if not host:
+                return False
+            if host in {"localhost", "127.0.0.1", "::1"}:
+                return False
+            try:
+                ip = ipaddress.ip_address(host)
+                if ip.is_private or ip.is_loopback or ip.is_link_local:
+                    return False
+            except ValueError:
+                # 不是纯 IP，当作域名处理
+                pass
+            return True
+        except Exception:
+            return False
+
+    def _validate_response_headers(self, res: requests.Response) -> bool:
+        content_type = (res.headers.get("Content-Type") or "").lower()
+        if content_type.startswith("text/html") or content_type.startswith("application/json"):
+            return False
+        if content_type and not (
+            "video/" in content_type
+            or "audio/" in content_type
+            or "application/octet-stream" in content_type
+            or "application/zip" in content_type
+            or "binary/octet-stream" in content_type
+        ):
+            # 对未知类型保守拒绝，降低下载错误页面或脚本内容的风险
+            return False
+        content_length = res.headers.get("Content-Length")
+        if content_length and content_length.isdigit() and int(content_length) > MAX_DOWNLOAD_BYTES:
+            return False
+        return True
+
     def download_asset(self, query: str, force: bool = False) -> Optional[str]:
         """
         下载云端素材并返回本地路径。
@@ -142,17 +185,38 @@ class CloudManager:
         if not url:
             print(f"[-] No valid download URL found for ID {eid}. Please browse this asset in JianYing while sniffer is running.")
             return None
+        if not self._is_safe_download_url(url):
+            print(f"[-] Unsafe download URL blocked for ID {eid}: {url}")
+            return None
 
         print(f"[*] Downloading Cloud Asset: {asset['name']}...")
         try:
             res = requests.get(url, stream=True, timeout=60)
             res.raise_for_status()
-            with open(local_path, 'wb') as f:
+            if not self._validate_response_headers(res):
+                print(f"[-] Download blocked by header validation for ID {eid}.")
+                return None
+
+            tmp_path = local_path + ".part"
+            total = 0
+            with open(tmp_path, 'wb') as f:
                 for chunk in res.iter_content(chunk_size=32768):
+                    if not chunk:
+                        continue
+                    total += len(chunk)
+                    if total > MAX_DOWNLOAD_BYTES:
+                        raise ValueError(f"Download exceeds size limit: {MAX_DOWNLOAD_BYTES} bytes")
                     f.write(chunk)
+            os.replace(tmp_path, local_path)
             print(f"[+] Download Finished: {local_path}")
             return local_path
         except Exception as e:
+            part = local_path + ".part"
+            if os.path.exists(part):
+                try:
+                    os.remove(part)
+                except Exception:
+                    pass
             print(f"[-] Download Error: {e}")
             return None
 

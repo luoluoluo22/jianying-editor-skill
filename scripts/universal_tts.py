@@ -5,7 +5,6 @@ import json
 import os
 import ssl
 import re
-import subprocess
 
 # --- 1. 自动配置提取器 ---
 def get_jy_local_config():
@@ -45,12 +44,23 @@ def get_jy_local_config():
 APP_KEY = "IZjhUeAYwP"
 APP_ID = "3704"
 
+def _build_ssl_context() -> ssl.SSLContext:
+    """
+    默认启用证书校验。仅在显式设置 JY_TTS_INSECURE_SSL=1 时降级，
+    用于排查本地证书环境问题。
+    """
+    if os.getenv("JY_TTS_INSECURE_SSL") == "1":
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        print("[!] WARNING: TLS verification disabled by JY_TTS_INSECURE_SSL=1", flush=True)
+        return ctx
+    return ssl.create_default_context()
+
 async def _run_sami_tts(text, speaker, output_file, dev_id, iid):
     ws_url = f"wss://sami.bytedance.com/internal/api/v2/ws?device_id={dev_id}&iid={iid}"
     headers = {"User-Agent": f"JianyingPro/5.9.0.11632 (Windows 10.0.19045; app_id:3704; device_id:{dev_id})"}
-    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    ssl_context.check_hostname = False
-    ssl_context.verify_mode = ssl.CERT_NONE
+    ssl_context = _build_ssl_context()
     
     try:
         async with websockets.connect(ws_url, additional_headers=headers, ssl=ssl_context, open_timeout=20) as ws:
@@ -86,7 +96,8 @@ async def _run_sami_tts(text, speaker, output_file, dev_id, iid):
                 with open(output_file, "wb") as f: f.write(audio_data)
                 return True, output_file
             return False, "No audio"
-    except Exception as e: return False, str(e)
+    except Exception as e:
+        return False, str(e)
 
 # --- 3. 微软 (Edge-TTS) Fallback ---
 async def _run_edge_tts(text, output_file, voice="zh-CN-YunxiNeural"):

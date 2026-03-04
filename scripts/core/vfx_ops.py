@@ -20,7 +20,23 @@ class VfxOpsMixin:
         self.script.add_segment(seg, track_name)
         return seg
 
-    def add_transition_simple(self, transition_name: str, video_segment: draft.VideoSegment, duration: Union[str, int] = "1s"):
+    def add_transition_simple(
+        self,
+        transition_name: str,
+        video_segment: Optional[draft.VideoSegment] = None,
+        duration: Union[str, int] = "1s",
+        track_name: Optional[str] = None,
+    ):
+        # 兼容调用：如果未直接给 segment，则尝试从指定轨道获取最后一个视频片段
+        if video_segment is None and track_name:
+            track = self.script.tracks.get(track_name)
+            if not track or not getattr(track, "segments", None):
+                return None
+            video_segment = track.segments[-1]
+
+        if video_segment is None:
+            return None
+
         trans_type = self._resolve_enum(draft.TransitionType, transition_name)
         if not trans_type: return None
         

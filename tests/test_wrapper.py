@@ -11,6 +11,7 @@ if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
 
 from jy_wrapper import JyProject, draft
+from cloud_manager import CloudManager
 
 class TestJyWrapper(unittest.TestCase):
     
@@ -79,6 +80,37 @@ class TestJyWrapper(unittest.TestCase):
         # 我们这里主要测试 Wrapper 的健壮性。
         p.add_transition_simple("BlackFade", duration="0.5s", track_name="V1")
         # 只要不报错 Crash 就算通过
+
+    def test_05_project_name_sanitization(self):
+        """测试 project_name 会被安全化且不越界到 root 外"""
+        p = JyProject("..\\..\\Bad:Name*", drafts_root=self.test_output, overwrite=True)
+        self.assertNotIn("..", p.name)
+        self.assertNotIn(":", p.name)
+        self.assertTrue(os.path.abspath(p.draft_dir).startswith(os.path.abspath(self.test_output)))
+
+    def test_06_cloud_url_guard(self):
+        """测试云下载 URL 安全校验：阻断 localhost/私网地址"""
+        cm = CloudManager()
+        self.assertTrue(cm._is_safe_download_url("https://example.com/a.mp4"))
+        self.assertFalse(cm._is_safe_download_url("http://127.0.0.1/test.mp4"))
+        self.assertFalse(cm._is_safe_download_url("http://localhost/test.mp4"))
+
+    def test_07_cloud_header_guard(self):
+        """测试下载响应头校验：拦截 html 和超大文件"""
+        cm = CloudManager()
+
+        class Resp:
+            def __init__(self, headers):
+                self.headers = headers
+
+        self.assertFalse(cm._validate_response_headers(Resp({"Content-Type": "text/html"})))
+        self.assertFalse(cm._validate_response_headers(Resp({"Content-Type": "application/json"})))
+        self.assertFalse(
+            cm._validate_response_headers(
+                Resp({"Content-Type": "video/mp4", "Content-Length": str(1024 * 1024 * 1024)})
+            )
+        )
+        self.assertTrue(cm._validate_response_headers(Resp({"Content-Type": "video/mp4", "Content-Length": "1024"})))
 
     @classmethod
     def tearDownClass(cls):

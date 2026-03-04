@@ -4,6 +4,7 @@ import shutil
 import time
 import json
 import uuid
+import re
 import pyJianYingDraft as draft
 from utils.formatters import format_srt_time, get_default_drafts_root
 
@@ -13,7 +14,7 @@ class JyProjectBase:
     """
     def __init__(self, project_name: str, width: int = 1920, height: int = 1080, 
                  drafts_root: str = None, overwrite: bool = True, script_instance: any = None):
-        self.root = drafts_root or get_default_drafts_root()
+        self.root = os.path.abspath(drafts_root or get_default_drafts_root())
         if not os.path.exists(self.root):
             try:
                 os.makedirs(self.root)
@@ -23,8 +24,8 @@ class JyProjectBase:
         print(f"📂 Project Root: {self.root}")
         
         self.df = draft.DraftFolder(self.root)
-        self.name = project_name
-        self.draft_dir = os.path.join(self.root, self.name)
+        self.name = self._sanitize_project_name(project_name)
+        self.draft_dir = self._safe_join_root(self.name)
         self._internal_colors = [] 
         self._cloud_audio_patches = {} 
         self._cloud_text_patches = {}   
@@ -38,38 +39,38 @@ class JyProjectBase:
             self._explicit_res = True 
             return
 
-        has_draft = self.df.has_draft(project_name)
+        has_draft = self.df.has_draft(self.name)
         
         if has_draft:
-            draft_path = os.path.join(self.root, project_name)
+            draft_path = self._safe_join_root(self.name)
             content_path = os.path.join(draft_path, "draft_content.json")
             meta_path = os.path.join(draft_path, "draft_meta_info.json")
             
             if not os.path.exists(content_path) or not os.path.exists(meta_path):
                 if overwrite:
-                    print(f"Corrupted draft detected (missing json): {project_name}")
+                    print(f"Corrupted draft detected (missing json): {self.name}")
                     print(f"Auto-healing: Removing corrupted folder...")
                     try:
-                        shutil.rmtree(draft_path, ignore_errors=True)
+                        self._safe_remove_dir(draft_path)
                         has_draft = False
                     except Exception as e:
                         print(f"Failed to cleanup corrupted draft: {e}")
                 else:
-                    print(f"Corrupted draft detected: {project_name} (missing json). Use overwrite=True to auto-fix.")
+                    print(f"Corrupted draft detected: {self.name} (missing json). Use overwrite=True to auto-fix.")
 
         if has_draft and not overwrite:
-            print(f"Loading existing project: {project_name}")
+            print(f"Loading existing project: {self.name}")
             try:
-                self.script = self.df.load_template(project_name)
+                self.script = self.df.load_template(self.name)
             except Exception as e:
                 print(f"Load failed ({e}), forcing recreate...")
-                self.script = self.df.create_draft(project_name, width, height, allow_replace=True)
+                self.script = self.df.create_draft(self.name, width, height, allow_replace=True)
         else:
-            print(f"Creating new project: {project_name}")
+            print(f"Creating new project: {self.name}")
             max_retries = 3
             for attempt in range(max_retries):
                 try:
-                    self.script = self.df.create_draft(project_name, width, height, allow_replace=overwrite)
+                    self.script = self.df.create_draft(self.name, width, height, allow_replace=overwrite)
                     break
                 except PermissionError:
                     if attempt < max_retries - 1:
@@ -121,3 +122,28 @@ class JyProjectBase:
 
         if issues_found:
             print("❗️ Timeline Audit highlighted potential duplication issues.")
+    def _sanitize_project_name(self, name: str) -> str:
+        """仅允许安全字符，防止路径穿越和非法文件名。"""
+        cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', "_", str(name)).strip().strip(".")
+        cleaned = re.sub(r"\s+", " ", cleaned)
+        while ".." in cleaned:
+            cleaned = cleaned.replace("..", "_")
+        if not cleaned:
+            raise ValueError("Invalid project_name: empty after sanitization.")
+        if cleaned != name:
+            print(f"⚠️ project_name sanitized: '{name}' -> '{cleaned}'")
+        return cleaned
+
+    def _safe_join_root(self, *parts: str) -> str:
+        target = os.path.abspath(os.path.normpath(os.path.join(self.root, *parts)))
+        if os.path.commonpath([self.root, target]) != self.root:
+            raise ValueError(f"Unsafe path detected: {target}")
+        return target
+
+    def _safe_remove_dir(self, path: str) -> None:
+        abs_path = os.path.abspath(path)
+        if abs_path == self.root:
+            raise ValueError("Refuse to remove drafts root directly.")
+        if os.path.commonpath([self.root, abs_path]) != self.root:
+            raise ValueError(f"Refuse to remove path outside root: {abs_path}")
+        shutil.rmtree(abs_path, ignore_errors=True)
