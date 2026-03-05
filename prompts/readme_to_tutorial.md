@@ -42,7 +42,7 @@ Write a Python script using `jianying-editor` skill (`jy_wrapper`) to build this
 *   **TTS Generation**: Use `edge_tts` to generate `intro.mp3`, `steps.mp3`, `outro.mp3` locally.
 *   **Visual Generation**:
     *   Create a temporary HTML file with CSS animations (`@keyframes`) matching the storyboard.
-    *   Use `project.add_web_code_vfx(html_code, ...)` to record it.
+    *   Use `project.add_web_asset_safe(html_path=..., ...)` to record it.
 *   **Assembly**:
     *   Add BGM (use `sync_jy_assets.py` to check for local music first, or fall back to `tech_bgm.mp3`).
     *   layer TTS audio on `VoiceOver` track.

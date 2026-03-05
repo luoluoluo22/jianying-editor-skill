@@ -11,7 +11,7 @@ When Jianying's built-in effects are insufficient (e.g., for data viz, complex 3
 
 ## Usage
 
-Use `project.add_web_code_vfx()` to inject HTML code that renders the effect.
+Use `project.add_web_asset_safe()` with a local HTML file path.
 
 ```python
 html_code = """
@@ -33,7 +33,11 @@ html_code = """
 </html>
 """
 
-project.add_web_code_vfx(html_code, start_time="0s", duration="5s")
+html_path = os.path.join(temp_dir, "vfx_scene.html")
+with open(html_path, "w", encoding="utf-8") as f:
+    f.write(html_code)
+
+project.add_web_asset_safe(html_path=html_path, start_time="0s", duration="5s")
 ```
 
 ## The Animation Contract (IMPORTANT)
