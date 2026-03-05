@@ -9,10 +9,8 @@ JianYing Movie Commentary Builder (Integrated Script)
 功能：加载 AI 生成的故事版 JSON，自动完成视频切片、字幕遮罩、双轨原声增强。
 """
 
-# 环境初始化 (由于在 scripts 目录下，直接 import jy_wrapper)
-current_dir = os.path.dirname(os.path.abspath(__file__))
-if current_dir not in sys.path:
-    sys.path.insert(0, current_dir)
+from utils.env_setup import setup_env
+setup_env()
 
 try:
     from jy_wrapper import JyProject, draft

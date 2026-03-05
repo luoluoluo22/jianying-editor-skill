@@ -6,21 +6,8 @@ import re
 from pathlib import Path
 
 # --- 1. 环境配置 (路径注入) ---
-current_dir = os.path.dirname(os.path.abspath(__file__))
-# 注入 JianYing Wrapper 路径 (当前目录)
-if current_dir not in sys.path:
-    sys.path.insert(0, current_dir)
-
-# 注入 Antigravity API Client 路径 (跨 Skill 调用)
-# 假设结构: .agent/skills/jianying-editor/scripts -> .agent/skills/antigravity-api-skill/libs
-api_skill_libs = os.path.abspath(os.path.join(current_dir, "../../antigravity-api-skill/libs"))
-
-if not os.path.exists(api_skill_libs):
-    # 尝试 fallback (如果是在开发环境根目录)
-    # f:\Desktop\kaifa\jianying-editor-skill\.agent\skills\antigravity-api-skill\libs
-    pass 
-
-sys.path.append(api_skill_libs)
+from utils.env_setup import setup_env
+setup_env()
 
 try:
     from jy_wrapper import JyProject
@@ -28,7 +15,6 @@ try:
 except ImportError as e:
     import warnings
     warnings.warn(f"[smart_rough_cut] Optional dependency missing: {e}. "
-                  f"This script requires 'antigravity-api-skill'. "
                   f"Functions in this module will not be available.")
     JyProject = None
     AntigravityClient = None

@@ -42,17 +42,28 @@ def create_compound_demo():
     main_project.add_media_safe(video_path, "0s", duration="8s", track_name="Background")
     
     # 3. 注入复合片段 (核心接口: add_compound_project)
-    # 将 sub_project 整体作为一个片段插入到主工程的 "Overlay" 轨道
+    # 当前精简版 wrapper 若未暴露该接口，则降级为覆盖层片段，保证示例可跑通。
     print("📦 正在将子工程注入为主视图的复合片段...")
-    main_project.add_compound_project(
-        sub_project, 
-        clip_name="我的嵌套模块", 
-        start_time="2s", 
-        track_name="Overlay"
-    )
+    if hasattr(main_project, "add_compound_project"):
+        main_project.add_compound_project(
+            sub_project,
+            clip_name="我的嵌套模块",
+            start_time="2s",
+            track_name="Overlay",
+        )
+    else:
+        print("⚠️ 当前 JyProject 未实现 add_compound_project，使用视频覆盖层降级演示。")
+        main_project.add_media_safe(video_path, "2s", duration="3s", track_name="Overlay")
+        main_project.add_text_simple("复合片段接口未启用，已降级为 Overlay", "2s", "2s", transform_y=0.2)
     
     # 在主工程加个顶部提示
-    main_project.add_text_simple("主工程：中间这段是复合片段", start_time="0s", duration="8s", transform_y=0.8)
+    main_project.add_text_simple(
+        "主工程：中间这段是复合片段",
+        start_time="0s",
+        duration="8s",
+        transform_y=0.8,
+        track_name="MainTitle",
+    )
     
     # 4. 保存主工程
     print("💾 保存主工程...")

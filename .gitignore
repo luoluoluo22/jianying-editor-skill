@@ -18,6 +18,10 @@ Desktop.ini
 dist/
 build/
 *.log
+test_run_artifacts/
+cloud_cache/
+scripts/cloud_cache/
+*.webm
 
 # Assets (large synced files - keep tracked manually)
 # assets/jy_sync/

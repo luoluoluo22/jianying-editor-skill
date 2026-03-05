@@ -17,12 +17,20 @@ import os
 import random
 
 # --- 1. 环境注入 ---
-# 自动定位 Skill 路径
+# 自动定位 Skill 路径（兼容从仓库根目录直接运行）
 current_dir = os.path.dirname(os.path.abspath(__file__))
-skill_root = os.path.join(current_dir, ".agent", "skills", "jianying-editor")
-if not os.path.exists(os.path.join(skill_root, "scripts")):
-    # 尝试另一种常见的路径结构 (如果脚本也被复制到了根目录)
-    skill_root = os.path.join(current_dir, "jianying-editor-skill", ".agent", "skills", "jianying-editor")
+skill_candidates = [
+    os.path.dirname(current_dir),  # 当前仓库结构: <skill_root>/references
+    os.path.join(current_dir, ".agent", "skills", "jianying-editor"),
+    os.path.join(current_dir, "jianying-editor-skill", ".agent", "skills", "jianying-editor"),
+    os.path.abspath(".agent/skills/jianying-editor"),
+]
+skill_root = next(
+    (p for p in skill_candidates if os.path.exists(os.path.join(p, "scripts", "jy_wrapper.py"))),
+    None,
+)
+if not skill_root:
+    raise ImportError("Could not locate jianying-editor skill root for full_feature_showcase.")
 
 sys.path.append(os.path.join(skill_root, "scripts"))
 # 确保 references 也能被找到 (用于 pyJianYingDraft)
@@ -65,8 +73,8 @@ def run_full_showcase():
     project.add_media_safe(VIDEO_PATH, start_time=cursor, duration="3s", source_start=0)
     cursor += 3000000 
     
-    # 片段 2: 视频的 10s-12s (2秒)
-    project.add_media_safe(VIDEO_PATH, start_time=cursor, duration="2s", source_start="10s")
+    # 片段 2: 使用测试素材中可用的范围（样例素材约 5s）
+    project.add_media_safe(VIDEO_PATH, start_time=cursor, duration="2s", source_start="1s")
     
     # 在片段 1 和 2 之间添加转场
     # 注意：转场通常加在后一个片段的前面，或者通过 add_transition_simple 自动处理
@@ -76,8 +84,8 @@ def run_full_showcase():
     
     cursor += 2000000
     
-    # 片段 3: 视频的 20s-23s (3秒)
-    project.add_media_safe(VIDEO_PATH, start_time=cursor, duration="3s", source_start="20s")
+    # 片段 3: 使用测试素材中可用的范围（样例素材约 5s）
+    project.add_media_safe(VIDEO_PATH, start_time=cursor, duration="3s", source_start="2s")
     
     # ==========================================
     # 2. 视觉特效 (VFX)
@@ -169,7 +177,7 @@ def run_full_showcase():
             duration="2s",
             font_size=10.0,
             transform_y=-0.5 - (i * 0.15), # 垂直排列
-            track_name="Subtitle_Main" # 强制指定同一个轨道名，触发 Auto-Layering
+            track_name=f"Subtitle_Main_{i}"  # 显式分轨，兼容精简 wrapper
         )
 
     # ==========================================
