@@ -3,62 +3,58 @@ import json
 import os
 import re
 import ssl
+from typing import Optional, Tuple
 
 import websockets
+
 from utils.config import CONFIG
 
 
-# --- 1. 自动配置提取器 ---
-def get_jy_local_config():
-    """自动从本地剪映目录探测 device_id 和 iid"""
+def get_jy_local_config() -> Tuple[str, str]:
     local_app_data = os.getenv("LOCALAPPDATA")
     if not local_app_data:
         return "1053764930506284", "2314914062247833"
 
     jy_user_data = os.path.join(local_app_data, r"JianyingPro\User Data")
-    config = {"device_id": "1053764930506284", "iid": "2314914062247833"}
+    cfg = {"device_id": "1053764930506284", "iid": "2314914062247833"}
 
     ttnet_path = os.path.join(jy_user_data, r"TTNet\tt_net_config.config")
     if os.path.exists(ttnet_path):
         try:
             with open(ttnet_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
-                match = re.search(r"device_id&#\*(\d+)", content)
-                if match:
-                    config["device_id"] = match.group(1)
+            m = re.search(r"device_id&#\*(\d+)", content)
+            if m:
+                cfg["device_id"] = m.group(1)
         except Exception:
             pass
 
     log_dir = os.path.join(jy_user_data, "Log")
     if os.path.exists(log_dir):
         logs = sorted(
-            [os.path.join(log_dir, f) for f in os.listdir(log_dir) if f.endswith(".log")],
+            [os.path.join(log_dir, x) for x in os.listdir(log_dir) if x.endswith(".log")],
             key=os.path.getmtime,
             reverse=True,
         )
-        for log_path in logs[:5]:
+        for p in logs[:5]:
             try:
-                with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
-                    chunk = f.read(1000000)
-                    match_iid = re.search(r"iid=(\d+)", chunk)
-                    if match_iid:
-                        config["iid"] = match_iid.group(1)
-                        break
+                with open(p, "r", encoding="utf-8", errors="ignore") as f:
+                    chunk = f.read(1_000_000)
+                m = re.search(r"iid=(\d+)", chunk)
+                if m:
+                    cfg["iid"] = m.group(1)
+                    break
             except Exception:
                 continue
-    return config["device_id"], config["iid"]
+
+    return cfg["device_id"], cfg["iid"]
 
 
-# --- 2. 剪映 (SAMI) WebSocket ---
 APP_KEY = "IZjhUeAYwP"
 APP_ID = "3704"
 
 
 def _build_ssl_context() -> ssl.SSLContext:
-    """
-    默认启用证书校验。仅在显式设置 JY_TTS_INSECURE_SSL=1 时降级，
-    用于排查本地证书环境问题。
-    """
     if CONFIG.tts_insecure_ssl:
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         ctx.check_hostname = False
@@ -68,7 +64,7 @@ def _build_ssl_context() -> ssl.SSLContext:
     return ssl.create_default_context()
 
 
-async def _run_sami_tts(text, speaker, output_file, dev_id, iid):
+async def _run_sami_tts(text: str, speaker: str, output_file: str, dev_id: str, iid: str):
     ws_url = f"wss://sami.bytedance.com/internal/api/v2/ws?device_id={dev_id}&iid={iid}"
     headers = {
         "User-Agent": f"JianyingPro/5.9.0.11632 (Windows 10.0.19045; app_id:3704; device_id:{dev_id})"
@@ -135,8 +131,7 @@ async def _run_sami_tts(text, speaker, output_file, dev_id, iid):
         return False, str(e)
 
 
-# --- 3. 微软 (Edge-TTS) Fallback ---
-async def _run_edge_tts(text, output_file, voice="zh-CN-YunxiNeural"):
+async def _run_edge_tts(text: str, output_file: str, voice: str = "zh-CN-YunxiNeural"):
     try:
         import edge_tts
 
@@ -151,31 +146,65 @@ async def _run_edge_tts(text, output_file, voice="zh-CN-YunxiNeural"):
         return False, f"Edge-TTS Error: {str(e)}"
 
 
-# --- 4. 统一调用接口 ---
-async def generate_voice(text: str, output_path: str, speaker: str = "zh_male_huoli"):
+async def generate_voice_with_meta(
+    text: str,
+    output_path: str,
+    speaker: str = "zh_male_huoli",
+    *,
+    backend: Optional[str] = None,
+    allow_fallback: bool = True,
+    sami_retries: int = 2,
+) -> Tuple[Optional[str], Optional[str]]:
     """
-    智能 TTS 生成器 (Skill 内置版)
-    优先使用剪映音色，失败则回退微软 Edge-TTS。
+    backend: None | "sami" | "edge"
+    allow_fallback: when True, SAMI failure may fallback to edge.
+    returns: (audio_path, backend_used)
     """
     dev_id, iid = get_jy_local_config()
     print(f"[*] Intelligent TTS Trace: speaker={speaker}, dev={dev_id}, iid={iid}", flush=True)
 
-    # 尝试剪映
-    ok, res = await _run_sami_tts(text, speaker, output_path, dev_id, iid)
-    if ok:
-        print(f"[+] SAMI Success: {res}", flush=True)
-        return res
-    else:
-        print(f"[!] SAMI Failed: {res}. Using Edge-TTS as fallback...", flush=True)
+    force_sami = backend == "sami"
+    force_edge = backend == "edge"
 
-    # 回退微软
+    if not force_edge:
+        for i in range(max(1, int(sami_retries))):
+            ok, res = await _run_sami_tts(text, speaker, output_path, dev_id, iid)
+            if ok:
+                print(f"[+] SAMI Success: {res}", flush=True)
+                return res, "sami"
+            print(f"[!] SAMI Failed (attempt {i + 1}/{max(1, int(sami_retries))}): {res}", flush=True)
+            if i + 1 < max(1, int(sami_retries)):
+                await asyncio.sleep(0.35)
+
+        if force_sami or not allow_fallback:
+            return None, None
+
     voice = "zh-CN-YunxiNeural" if "male" in speaker else "zh-CN-XiaoxiaoNeural"
     ok_edge, res_edge = await _run_edge_tts(text, output_path, voice)
     if ok_edge:
         print(f"[+] Edge-TTS Success: {res_edge}", flush=True)
-        return res_edge
+        return res_edge, "edge"
+    return None, None
 
-    return None
+
+async def generate_voice(
+    text: str,
+    output_path: str,
+    speaker: str = "zh_male_huoli",
+    *,
+    backend: Optional[str] = None,
+    allow_fallback: bool = True,
+    sami_retries: int = 2,
+):
+    path, _backend_used = await generate_voice_with_meta(
+        text,
+        output_path,
+        speaker,
+        backend=backend,
+        allow_fallback=allow_fallback,
+        sami_retries=sami_retries,
+    )
+    return path
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 import os
+import pyJianYingDraft as draft
 
 from _bootstrap import ensure_skill_scripts_on_path
 
@@ -34,13 +35,18 @@ def create_compound_demo() -> None:
     else:
         print("[warn] add_compound_project not available, fallback to overlay clip.")
         main_project.add_media_safe(video_path, "2s", duration="3s", track_name="Overlay")
-        main_project.add_text_simple("Compound fallback overlay", "2s", "2s", transform_y=0.2)
+        main_project.add_text_simple(
+            "Compound fallback overlay",
+            "2s",
+            "2s",
+            clip_settings=draft.ClipSettings(transform_y=0.2),
+        )
 
     main_project.add_text_simple(
         "Main project with compound clip",
         start_time="0s",
         duration="8s",
-        transform_y=0.8,
+        clip_settings=draft.ClipSettings(transform_y=0.8),
         track_name="MainTitle",
     )
     main_project.save()

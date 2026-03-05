@@ -30,6 +30,13 @@ class TextOpsMixin:
         # 仅透传 TextSegment 支持的字段
         allowed_keys = {"font", "style", "clip_settings", "border", "background", "shadow"}
         text_kwargs = {k: v for k, v in kwargs.items() if k in allowed_keys}
+        # 统一默认字幕样式：字号 5 + 黑色描边
+        if "style" not in text_kwargs:
+            text_kwargs["style"] = draft.TextStyle(size=5.0)
+        if "border" not in text_kwargs:
+            text_kwargs["border"] = draft.TextBorder(color=(0.0, 0.0, 0.0), alpha=1.0, width=40.0)
+        if "clip_settings" not in text_kwargs:
+            text_kwargs["clip_settings"] = draft.ClipSettings(transform_y=-0.8)
 
         seg = draft.TextSegment(text, draft.Timerange(start_us, dur_us), **text_kwargs)
 
@@ -54,6 +61,7 @@ class TextOpsMixin:
                               start_time: Union[str, int] = None, track_name: str = "Subtitles"):
         if start_time is None: start_time = self.get_track_duration(track_name)
         curr_us = safe_tim(start_time)
+        chosen_backend = None
         
         parts = [p for p in re.split(r'([，。！？、\n\r]+)', text) if p.strip()]
         sentences = []
@@ -66,8 +74,17 @@ class TextOpsMixin:
             clean_text = s.rstrip('，。！？、\n\r ')
             if not clean_text: continue
             
-            audio_seg = self.add_tts_intelligent(clean_text, speaker=speaker, start_time=curr_us)
+            audio_seg, backend_used = self.add_tts_intelligent(
+                clean_text,
+                speaker=speaker,
+                start_time=curr_us,
+                tts_backend=chosen_backend,
+                allow_fallback=(chosen_backend is None),
+                return_backend=True,
+            )
             if audio_seg:
+                if chosen_backend is None:
+                    chosen_backend = backend_used
                 actual_dur_us = audio_seg.target_timerange.duration
                 # 默认设置为屏幕底部 (transform_y=-0.8)
                 clip_settings = draft.ClipSettings(transform_y=-0.8)
@@ -77,10 +94,18 @@ class TextOpsMixin:
                                     track_name=track_name, clip_settings=clip_settings,
                                     style=subtitle_style, border=subtitle_border)
                 curr_us += actual_dur_us + 100000 
+            else:
+                if chosen_backend is not None:
+                    raise RuntimeError(
+                        f"TTS segment failed under locked backend '{chosen_backend}'. "
+                        "Stopped to avoid mixed voice providers."
+                    )
         return curr_us
 
-    def add_tts_intelligent(self, text: str, speaker: str = "zh_male_huoli", start_time: Union[str, int] = None, track_name: str = "AudioTrack"):
-        from universal_tts import generate_voice
+    def add_tts_intelligent(self, text: str, speaker: str = "zh_male_huoli", start_time: Union[str, int] = None, 
+                            track_name: str = "AudioTrack", tts_backend: str = None, 
+                            allow_fallback: bool = True, return_backend: bool = False):
+        from universal_tts import generate_voice_with_meta
         import uuid
         
         if start_time is None:
@@ -91,7 +116,14 @@ class TextOpsMixin:
         output_file = os.path.join(temp_dir, f"tts_{uuid.uuid4().hex[:8]}.ogg")
 
         async def _generate():
-            return await generate_voice(text, output_file, speaker)
+            return await generate_voice_with_meta(
+                text,
+                output_file,
+                speaker,
+                backend=tts_backend,
+                allow_fallback=allow_fallback,
+                sami_retries=2,
+            )
 
         try:
             asyncio.get_running_loop()
@@ -113,12 +145,14 @@ class TextOpsMixin:
             t.join()
             if box["err"] is not None:
                 raise box["err"]
-            actual_path = box["path"]
+            actual_path, backend_used = box["path"] if box["path"] else (None, None)
         else:
-            actual_path = asyncio.run(_generate())
+            actual_path, backend_used = asyncio.run(_generate())
 
-        if not actual_path: return None
-        return self.add_media_safe(actual_path, start_time, track_name=track_name)
+        if not actual_path:
+            return (None, None) if return_backend else None
+        seg = self.add_media_safe(actual_path, start_time, track_name=track_name)
+        return (seg, backend_used) if return_backend else seg
 
     async def add_tts_intelligent_async(
         self,

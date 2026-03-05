@@ -16,7 +16,7 @@ project.add_text_simple(
     text="Hello World",
     start_time="0s",
     duration="3s",
-    transform_y=-0.8,       # Vertical position: -1.0 (bottom) to 1.0 (top)
+    clip_settings=draft.ClipSettings(transform_y=-0.8),  # Vertical position: -1.0 (bottom) to 1.0 (top)
     font_size=12.0,         # Scale factor (approximate)
     color_rgb=(1, 1, 1),    # RGB tuple (0-1)
     anim_in=None            # Optional animation identifier (e.g. "打字机_I")
@@ -24,10 +24,10 @@ project.add_text_simple(
 ```
 
 ### Constraints
-- **Vertical Position (`transform_y`)**:
-    - `-0.8` is standard for subtitles.
-    - `0.0` is centered.
-    - `0.8` is for titles/headers.
+- **Vertical Position (`clip_settings.transform_y`)**:
+- `-0.8` is standard for subtitles.
+- `0.0` is centered.
+- `0.8` is for titles/headers.
 - **Duration**: MUST be specified explicitly (e.g., `"3s"`).
 
 ## 2. Styled Text / Flower Text (花字)

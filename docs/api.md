@@ -39,6 +39,10 @@ JyProject(project_name: str, width: int = 1920, height: int = 1080, drafts_root:
 - `add_tts_intelligent(text, speaker="zh_male_huoli", start_time=None, track_name="AudioTrack")`
 - `add_narrated_subtitles(text, speaker="zh_female_xiaopengyou", start_time=None, track_name="Subtitles")`
 
+`add_text_simple(..., **kwargs)` supports `style`, `border`, `clip_settings`, `font`, `background`, `shadow`.
+Use `clip_settings=draft.ClipSettings(transform_y=-0.8)` for subtitle bottom position.
+Do not pass `transform_y` directly as a top-level arg.
+
 ### VFX / Transition APIs
 
 - `add_effect_simple(effect_name, start_time=None, duration="3s", track_name="EffectTrack")`

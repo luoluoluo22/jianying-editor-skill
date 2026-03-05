@@ -60,7 +60,12 @@ def build_movie_commentary(video_path, storyboard_path, project_name="AI_Movie_C
                 for sub_t in sub_segments:
                     display_text = re.sub(r'[^\w\s\u4e00-\u9fa5]', '', sub_t).strip()
                     if display_text:
-                        project.add_text_simple(display_text, local_cursor, sub_dur_us, transform_y=-0.8)
+                        project.add_text_simple(
+                            display_text,
+                            local_cursor,
+                            sub_dur_us,
+                            clip_settings=draft.ClipSettings(transform_y=-0.8),
+                        )
                     local_cursor += sub_dur_us
         else:
             # D. 原声高光片段逻辑 (双轨增强)
