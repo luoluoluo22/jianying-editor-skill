@@ -9,6 +9,10 @@ Use this skill when the user wants to automate video editing, generate drafts, o
 
 Agent execution playbook: [docs/agent-playbook.md](docs/agent-playbook.md)
 Minimal command SOP: [docs/minimal-command-sop.md](docs/minimal-command-sop.md)
+Draft inspector CLI:
+`python <SKILL_ROOT>/scripts/draft_inspector.py list --limit 20`
+`python <SKILL_ROOT>/scripts/draft_inspector.py summary --name "DraftName"`
+`python <SKILL_ROOT>/scripts/draft_inspector.py show --name "DraftName" --kind content --json`
 For generic editing requests, always follow the "Quick Edit Runtime Template" and "Acceptance Checklist" in that playbook.
 
 ## 🚨 重要开发原则 (CRITICAL DEVELOPER RULES)
@@ -48,6 +52,7 @@ Refer to these for complete workflows:
 - [examples/simple_clip_demo.py](examples/simple_clip_demo.py) - Quick-start tutorial for basic cutting and track management.
 - [examples/compound_clip_demo.py](examples/compound_clip_demo.py) - **New**: Professional nested project (Compound Clip) automation.
 - [examples/cloud_video_music_tts_demo.py](examples/cloud_video_music_tts_demo.py) - Cloud video + cloud BGM + TTS/subtitle alignment.
+- [examples/web_to_video_intro_demo.py](examples/web_to_video_intro_demo.py) - Web-to-Video intro demo (HTML animation -> timeline clip).
 - [examples/robust_auto_export.py](examples/robust_auto_export.py) - Stable export workflow and failure handling.
 - [examples/auto_exposure_align_demo.py](examples/auto_exposure_align_demo.py) - CV-assisted exposure alignment workflow.
 - [examples/video_transcribe_and_match.py](examples/video_transcribe_and_match.py) - **Advanced**: AI-driven workflow (Transcribe Video -> Match B-Roll via AI semantics -> Assemble Draft).

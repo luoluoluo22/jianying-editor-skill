@@ -69,7 +69,10 @@ class TextOpsMixin:
             audio_seg = self.add_tts_intelligent(clean_text, speaker=speaker, start_time=curr_us)
             if audio_seg:
                 actual_dur_us = audio_seg.target_timerange.duration
-                self.add_text_simple(clean_text, start_time=curr_us, duration=actual_dur_us, track_name=track_name)
+                # 默认设置为屏幕底部 (transform_y=-0.8)
+                clip_settings = draft.ClipSettings(transform_y=-0.8)
+                self.add_text_simple(clean_text, start_time=curr_us, duration=actual_dur_us, 
+                                    track_name=track_name, clip_settings=clip_settings)
                 curr_us += actual_dur_us + 100000 
         return curr_us
 

@@ -1,33 +1,10 @@
 import os
 import sys
 
+from _bootstrap import ensure_skill_scripts_on_path
 
-def resolve_wrapper_path() -> str:
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    env_root = os.getenv("JY_SKILL_ROOT", "").strip()
-    candidates = [
-        env_root,
-        os.path.join(current_dir, ".agent", "skills", "jianying-editor"),
-        os.path.join(current_dir, ".trae", "skills", "jianying-editor"),
-        os.path.join(current_dir, ".claude", "skills", "jianying-editor"),
-        os.path.join(current_dir, "skills", "jianying-editor"),
-        os.path.abspath(".agent/skills/jianying-editor"),
-        os.path.abspath(".trae/skills/jianying-editor"),
-        os.path.abspath(".claude/skills/jianying-editor"),
-        os.path.dirname(current_dir),  # examples/ under skill root
-    ]
-    for p in candidates:
-        if not p:
-            continue
-        scripts_dir = os.path.join(os.path.abspath(p), "scripts")
-        if os.path.exists(os.path.join(scripts_dir, "jy_wrapper.py")):
-            return scripts_dir
-    raise ImportError("Could not find jianying-editor/scripts/jy_wrapper.py")
-
-
-WRAPPER_PATH = resolve_wrapper_path()
-if WRAPPER_PATH not in sys.path:
-    sys.path.insert(0, WRAPPER_PATH)
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+SKILL_ROOT, WRAPPER_PATH = ensure_skill_scripts_on_path(CURRENT_DIR)
 
 from jy_wrapper import JyProject
 
@@ -35,8 +12,7 @@ from jy_wrapper import JyProject
 def main() -> None:
     project = JyProject(project_name="Hello_JianYing_V3", overwrite=True)
 
-    skill_root = os.path.dirname(WRAPPER_PATH)
-    assets_dir = os.path.join(skill_root, "assets")
+    assets_dir = os.path.join(SKILL_ROOT, "assets")
     video_path = os.path.join(assets_dir, "video.mp4")
     bgm_path = os.path.join(assets_dir, "audio.mp3")
 

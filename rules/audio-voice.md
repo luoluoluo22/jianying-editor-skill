@@ -25,7 +25,7 @@ Recommended speakers:
 - `zh_male_huoli`
 - `zh_female_xiaopengyou`
 - `zh_male_xionger_stream_gpu`
-- `zh_female_shunv`
+- `zh_female_inspirational`
 
 ## 2) TTS + Subtitles Sync
 

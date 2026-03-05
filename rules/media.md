@@ -32,6 +32,7 @@ def add_media_safe(self, file_path, start_time=None, duration=None, track_name=N
 2.  **Audio**: You can also use `project.add_audio_safe(...)` which is an alias specifically for audio, ensuring it goes to an audio track.
 3.  **Track Names**: Providing a `track_name` (e.g. "OverlapTrack") helps forcing media onto specific or new tracks, useful for Picture-in-Picture (PIP).
 4.  **Return Value**: Capture the return value if you plan to add animations (Keyframes) to this clip.
+5.  **WEBM Import**: `add_media_safe(...)` automatically normalizes `.webm` to JianYing-friendly MP4 before import. Do not add manual conversion steps unless explicitly required.
 
 ## AI 视频分析优化 (AI Analysis Optimization)
 

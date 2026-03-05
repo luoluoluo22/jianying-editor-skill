@@ -4,6 +4,7 @@ from typing import Union
 import pyJianYingDraft as draft
 from pyJianYingDraft import trange
 from utils.formatters import safe_tim, get_duration_ffprobe_cached, tim
+from utils.media_normalizer import normalize_webm_for_jianying
 
 class MediaOpsMixin:
     """
@@ -16,6 +17,15 @@ class MediaOpsMixin:
             return None
 
         ext = os.path.splitext(media_path)[1].lower()
+        # Normalize WEBM to a stable MP4 profile before import to avoid parser incompatibilities.
+        if ext == ".webm":
+            normalized_path = normalize_webm_for_jianying(media_path)
+            if not normalized_path:
+                print(f"❌ WEBM normalization failed: {media_path}")
+                return None
+            media_path = normalized_path
+            ext = ".mp4"
+
         if ext in [".mp3", ".wav", ".aac", ".flac", ".m4a", ".ogg"]:
             return self.add_audio_safe(media_path, start_time, duration, track_name or "AudioTrack")
         
@@ -90,18 +100,19 @@ class MediaOpsMixin:
         return self.add_media_safe(local_path, start_time, duration, track_name or "VideoTrack")
 
     def add_cloud_music(self, query: str, start_time: Union[str, int] = None, 
-                        duration: Union[str, int] = None, name: str = None, duration_s: float = None):
+                        duration: Union[str, int] = None, name: str = None, duration_s: float = None, 
+                        track_name: str = "AudioTrack"):
         """
         通过 Cloud ID 添加云端音乐。直接注入 Material ID 补丁。
         """
         if start_time is None:
-            start_time = self.get_track_duration("AudioTrack")
+            start_time = self.get_track_duration(track_name)
 
         # 优先使用真实本地缓存文件，避免生成虚拟路径导致“媒体丢失”提示。
         # 若下载失败，再回退到旧的 mock 注入模式。
         local_path = self.cloud_manager.download_asset(query)
         if local_path and os.path.exists(local_path):
-            seg = self.add_audio_safe(local_path, start_time=start_time, duration=duration, track_name="AudioTrack")
+            seg = self.add_audio_safe(local_path, start_time=start_time, duration=duration, track_name=track_name)
             if seg is not None:
                 return seg
              
@@ -123,10 +134,10 @@ class MediaOpsMixin:
         # 3. 使用 Mock 素材
         from core.mocking_ops import MockAudioMaterial
         mat = MockAudioMaterial(query, final_dur_us, name or f"CloudMusic_{query}", dummy_path)
-        seg = draft.AudioSegment(mat, trange(safe_tim(start_time), final_dur_us), source_timerange=trange(0, final_dur_us))
+        seg = draft.AudioSegment(mat, draft.Timerange(safe_tim(start_time), final_dur_us), source_timerange=draft.Timerange(0, final_dur_us))
         
-        self._ensure_track(draft.TrackType.audio, "AudioTrack")
-        self.script.add_segment(seg, "AudioTrack")
+        self._ensure_track(draft.TrackType.audio, track_name)
+        self.script.add_segment(seg, track_name)
         return seg
 
     def _ensure_track(self, track_type, track_name):

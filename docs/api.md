@@ -89,3 +89,12 @@ Key scripts:
 - `scripts/asset_search.py`
 - `scripts/build_cloud_music_library.py`
 - `scripts/auto_exporter.py`
+- `scripts/draft_inspector.py`
+
+### Draft Inspector CLI
+
+```bash
+python <SKILL_ROOT>/scripts/draft_inspector.py list --limit 20
+python <SKILL_ROOT>/scripts/draft_inspector.py summary --name "DraftName"
+python <SKILL_ROOT>/scripts/draft_inspector.py show --name "DraftName" --kind content --json
+```
