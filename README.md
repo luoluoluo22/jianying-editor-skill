@@ -32,8 +32,6 @@
 - **自动导出依赖老版本** -- 自动导出功能目前只支持 **剪映 5.9 及以下版本**（6.0+ 弹窗太多会干扰自动化脚本）
 - **不支持手机端剪映** -- 只能配合 Windows/Mac 桌面版剪映专业版使用
 
----
-
 ## 🚀 快速开始 (Quick Start)
 
 ### 1. 安装 Skill (Install)
@@ -44,8 +42,6 @@
 ```powershell
 irm is.gd/rpb65M | iex
 ```
-
----
 
 **手动安装 (Git Clone):**
 
@@ -102,8 +98,6 @@ git clone https://github.com/luoluoluo22/jianying-editor-skill.git skills/jianyi
 
 **用剪映曲库的音乐**
 > "我想用剪映里那首'阳光旅途'当背景音乐"（需要先在剪映里播放一次建立缓存）
-
----
 
 ## 📦 环境准备 (必读)
 
@@ -191,3 +185,15 @@ git pull
   - 录像文件会自动整理好，不再乱丢在桌面。
 
 ---
+
+## 打赏支持
+
+如果这个项目对你有帮助，欢迎打赏支持。你的支持会直接转化为继续开发和维护的动力。
+
+### 支付宝
+
+![支付宝收款码](docs/images/donate/alipay.jpg)
+
+### 微信
+
+![微信收款码](docs/images/donate/wechat.png)
