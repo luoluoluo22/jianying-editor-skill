@@ -4,7 +4,6 @@ import shutil
 import time
 
 import pyJianYingDraft as draft
-
 from utils.formatters import get_default_drafts_root
 
 
@@ -82,13 +81,17 @@ class JyProjectBase:
             max_retries = 3
             for attempt in range(max_retries):
                 try:
-                    self.script = self.df.create_draft(self.name, width, height, allow_replace=overwrite)
+                    self.script = self.df.create_draft(
+                        self.name, width, height, allow_replace=overwrite
+                    )
                     break
                 except PermissionError:
                     if attempt < max_retries - 1:
                         released = self._try_release_project_lock()
                         if released:
-                            print("[i] Detected project lock. Switched JianYing to home page, retrying...")
+                            print(
+                                "[i] Detected project lock. Switched JianYing to home page, retrying..."
+                            )
                         else:
                             print(
                                 "\n"
@@ -113,24 +116,26 @@ class JyProjectBase:
             return False
 
         try:
-            ctl = JianyingController()
+            ctl = JianyingController(keep_topmost=False)
             status = getattr(ctl, "app_status", "")
 
             if status == "home":
+                ctl.release_topmost()
                 return True
 
             if status == "pre_export":
                 try:
                     ctl.app.SendKeys("{Esc}")
                     time.sleep(1)
-                    ctl.get_window()
+                    ctl.get_window(topmost=False)
                 except Exception:
                     pass
                 status = getattr(ctl, "app_status", "")
 
             if status == "edit":
                 ctl.switch_to_home()
-                ctl.get_window()
+                ctl.get_window(topmost=False)
+                ctl.release_topmost()
                 return getattr(ctl, "app_status", "") == "home"
 
             return False
@@ -140,7 +145,11 @@ class JyProjectBase:
 
     def get_track_duration(self, track_name: str) -> int:
         tracks = self.script.tracks
-        iterator = tracks.values() if isinstance(tracks, dict) else (tracks if isinstance(tracks, list) else [])
+        iterator = (
+            tracks.values()
+            if isinstance(tracks, dict)
+            else (tracks if isinstance(tracks, list) else [])
+        )
         for track in iterator:
             if hasattr(track, "name") and getattr(track, "name") == track_name:
                 max_end = 0

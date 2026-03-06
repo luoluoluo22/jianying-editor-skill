@@ -4,6 +4,7 @@ import os
 import shutil
 import sys
 import unittest
+from unittest.mock import patch
 
 # Bootstrap path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -13,6 +14,7 @@ if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
 
 from cloud_manager import CloudManager
+from core.mocking_ops import MockAudioMaterial
 from jy_wrapper import JyProject, draft
 from utils.formatters import safe_tim
 
@@ -134,6 +136,35 @@ class TestJyWrapper(unittest.TestCase):
         """测试 safe_tim 对 int 输入按微秒处理，避免 55h 级别放大"""
         self.assertEqual(safe_tim(200000), 200000)  # 0.2s
         self.assertEqual(safe_tim(1.5), 1500000)  # float 仍按秒解析
+
+    def test_10_safe_tim_explicit_units(self):
+        """测试 safe_tim 支持 ms/us 和复合单位字符串"""
+        self.assertEqual(safe_tim("500ms"), 500000)
+        self.assertEqual(safe_tim("200000us"), 200000)
+        self.assertEqual(safe_tim("1m2.5s"), 62500000)
+        self.assertEqual(safe_tim("1h2m3s500ms"), 3723500000)
+
+    def test_11_audio_auto_layering(self):
+        """测试音频轨道重叠时自动创建后缀轨道"""
+        p = JyProject("TestAudioLayer", drafts_root=self.test_output, overwrite=True)
+
+        def fake_audio_material(path):
+            return MockAudioMaterial(f"mat_{os.path.basename(path)}", 3000000, "TestAudio", path)
+
+        with patch("core.media_ops.draft.AudioMaterial", side_effect=fake_audio_material):
+            first = p.add_audio_safe(
+                "voice_a.mp3", start_time="0s", duration="2s", track_name="AudioTrack"
+            )
+            second = p.add_audio_safe(
+                "voice_b.mp3", start_time="1s", duration="2s", track_name="AudioTrack"
+            )
+
+        self.assertIsNotNone(first)
+        self.assertIsNotNone(second)
+        self.assertIn("AudioTrack", p.script.tracks)
+        self.assertIn("AudioTrack_1", p.script.tracks)
+        self.assertEqual(len(p.script.tracks["AudioTrack"].segments), 1)
+        self.assertEqual(len(p.script.tracks["AudioTrack_1"].segments), 1)
 
     @classmethod
     def tearDownClass(cls):

@@ -190,10 +190,15 @@ git pull
 
 如果这个项目对你有帮助，欢迎打赏支持。你的支持会直接转化为继续开发和维护的动力。
 
-### 支付宝
-
-![支付宝收款码](docs/images/donate/alipay.jpg)
-
-### 微信
-
-![微信收款码](docs/images/donate/wechat.png)
+<table>
+  <tr>
+    <td align="center">
+      <strong>支付宝</strong><br>
+      <img src="docs/images/donate/alipay.jpg" alt="支付宝收款码" width="280">
+    </td>
+    <td align="center">
+      <strong>微信</strong><br>
+      <img src="docs/images/donate/wechat.png" alt="微信收款码" width="280">
+    </td>
+  </tr>
+</table>

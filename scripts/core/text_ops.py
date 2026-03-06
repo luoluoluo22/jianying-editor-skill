@@ -1,21 +1,30 @@
+import asyncio
 import os
 import re
-import asyncio
 import threading
 from typing import Union
+
 import pyJianYingDraft as draft
-from utils.formatters import safe_tim, tim
+from utils.formatters import safe_tim
+
 
 class TextOpsMixin:
     """
     JyProject 的文本与字幕 Mixin。
     """
-    def add_text_simple(self, text: str, start_time: Union[str, int] = None, duration: Union[str, int] = "3s", 
-                        track_name: str = "Subtitles", **kwargs):
+
+    def add_text_simple(
+        self,
+        text: str,
+        start_time: Union[str, int] = None,
+        duration: Union[str, int] = "3s",
+        track_name: str = "Subtitles",
+        **kwargs,
+    ):
         if start_time is None:
             start_time = self.get_track_duration(track_name)
         self._ensure_track(draft.TrackType.text, track_name)
-        
+
         start_us = safe_tim(start_time)
         dur_us = safe_tim(duration)
 
@@ -57,23 +66,31 @@ class TextOpsMixin:
         self.script.add_segment(seg, track_name)
         return seg
 
-    def add_narrated_subtitles(self, text: str, speaker: str = "zh_female_xiaopengyou", 
-                              start_time: Union[str, int] = None, track_name: str = "Subtitles"):
-        if start_time is None: start_time = self.get_track_duration(track_name)
+    def add_narrated_subtitles(
+        self,
+        text: str,
+        speaker: str = "zh_female_xiaopengyou",
+        start_time: Union[str, int] = None,
+        track_name: str = "Subtitles",
+    ):
+        if start_time is None:
+            start_time = self.get_track_duration(track_name)
         curr_us = safe_tim(start_time)
         chosen_backend = None
-        
-        parts = [p for p in re.split(r'([，。！？、\n\r]+)', text) if p.strip()]
+
+        parts = [p for p in re.split(r"([，。！？、\n\r]+)", text) if p.strip()]
         sentences = []
         for i in range(0, len(parts), 2):
             s = parts[i]
-            if i + 1 < len(parts): s += parts[i+1]
+            if i + 1 < len(parts):
+                s += parts[i + 1]
             sentences.append(s.strip())
 
         for s in sentences:
-            clean_text = s.rstrip('，。！？、\n\r ')
-            if not clean_text: continue
-            
+            clean_text = s.rstrip("，。！？、\n\r ")
+            if not clean_text:
+                continue
+
             audio_seg, backend_used = self.add_tts_intelligent(
                 clean_text,
                 speaker=speaker,
@@ -90,10 +107,16 @@ class TextOpsMixin:
                 clip_settings = draft.ClipSettings(transform_y=-0.8)
                 subtitle_style = draft.TextStyle(size=5.0)
                 subtitle_border = draft.TextBorder(color=(0.0, 0.0, 0.0), alpha=1.0, width=40.0)
-                self.add_text_simple(clean_text, start_time=curr_us, duration=actual_dur_us,
-                                    track_name=track_name, clip_settings=clip_settings,
-                                    style=subtitle_style, border=subtitle_border)
-                curr_us += actual_dur_us + 100000 
+                self.add_text_simple(
+                    clean_text,
+                    start_time=curr_us,
+                    duration=actual_dur_us,
+                    track_name=track_name,
+                    clip_settings=clip_settings,
+                    style=subtitle_style,
+                    border=subtitle_border,
+                )
+                curr_us += actual_dur_us + 100000
             else:
                 if chosen_backend is not None:
                     raise RuntimeError(
@@ -102,15 +125,23 @@ class TextOpsMixin:
                     )
         return curr_us
 
-    def add_tts_intelligent(self, text: str, speaker: str = "zh_male_huoli", start_time: Union[str, int] = None, 
-                            track_name: str = "AudioTrack", tts_backend: str = None, 
-                            allow_fallback: bool = True, return_backend: bool = False):
-        from universal_tts import generate_voice_with_meta
+    def add_tts_intelligent(
+        self,
+        text: str,
+        speaker: str = "zh_male_huoli",
+        start_time: Union[str, int] = None,
+        track_name: str = "VoiceOver",
+        tts_backend: str = None,
+        allow_fallback: bool = True,
+        return_backend: bool = False,
+    ):
         import uuid
-        
+
+        from universal_tts import generate_voice_with_meta
+
         if start_time is None:
             start_time = self.get_track_duration(track_name)
-            
+
         temp_dir = os.path.join(self.root, self.name, "temp_assets")
         os.makedirs(temp_dir, exist_ok=True)
         output_file = os.path.join(temp_dir, f"tts_{uuid.uuid4().hex[:8]}.ogg")
@@ -159,10 +190,11 @@ class TextOpsMixin:
         text: str,
         speaker: str = "zh_male_huoli",
         start_time: Union[str, int] = None,
-        track_name: str = "AudioTrack",
+        track_name: str = "VoiceOver",
     ):
-        from universal_tts import generate_voice
         import uuid
+
+        from universal_tts import generate_voice
 
         if start_time is None:
             start_time = self.get_track_duration(track_name)
