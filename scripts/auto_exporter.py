@@ -1,5 +1,6 @@
 import argparse
 import os
+import sys
 
 from utils.cli_protocol import emit_result, make_result
 from utils.env_setup import setup_env
@@ -15,6 +16,32 @@ import pyJianYingDraft as draft  # noqa: E402
 def auto_export(
     draft_name: str, output_path: str, resolution: str = None, framerate: str = None
 ) -> tuple[int, dict]:
+    if sys.platform != "win32":
+        return 2, make_result(
+            False,
+            "unsupported_platform",
+            "Auto export uses Windows UI Automation. On macOS, generate the draft and export it from JianYing manually.",
+            {
+                "draft": draft_name,
+                "output": output_path,
+                "platform": sys.platform,
+                "manual_export_required": True,
+            },
+        )
+
+    missing = [
+        name
+        for name in ("JianyingController", "ExportResolution", "ExportFramerate")
+        if not hasattr(draft, name)
+    ]
+    if missing:
+        return 2, make_result(
+            False,
+            "automation_unavailable",
+            f"pyJianYingDraft automation API unavailable: {', '.join(missing)}",
+            {"draft": draft_name, "output": output_path, "manual_export_required": True},
+        )
+
     res_map = {
         "480": draft.ExportResolution.RES_480P,
         "720": draft.ExportResolution.RES_720P,

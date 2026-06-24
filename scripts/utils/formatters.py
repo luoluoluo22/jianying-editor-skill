@@ -21,6 +21,10 @@ def find_draft_content_path(draft_path: str) -> Optional[str]:
 def get_default_drafts_root() -> str:
     """自动探测剪映草稿目录 (Windows / macOS 跨平台)"""
     import sys as _sys
+    from utils.config import CONFIG
+
+    if CONFIG.projects_root_override:
+        return os.path.abspath(os.path.expanduser(CONFIG.projects_root_override))
 
     candidates = []
 
@@ -29,15 +33,28 @@ def get_default_drafts_root() -> str:
         home = os.path.expanduser("~")
         candidates.extend(
             [
-                os.path.join(home, "Movies", "JianyingPro Drafts"),
                 os.path.join(
                     home, "Movies", "JianyingPro", "User Data", "Projects", "com.lveditor.draft"
                 ),
+                os.path.join(home, "Movies", "JianyingPro Drafts"),
                 os.path.join(
                     home,
                     "Library",
                     "Containers",
                     "com.lemon.lvpro",
+                    "Data",
+                    "Library",
+                    "Application Support",
+                    "JianyingPro",
+                    "User Data",
+                    "Projects",
+                    "com.lveditor.draft",
+                ),
+                os.path.join(
+                    home,
+                    "Library",
+                    "Containers",
+                    "com.bytedance.JianyingPro",
                     "Data",
                     "Library",
                     "Application Support",
@@ -57,7 +74,9 @@ def get_default_drafts_root() -> str:
                 ),
             ]
         )
-        fallback = os.path.join(home, "Movies", "JianyingPro Drafts")
+        fallback = os.path.join(
+            home, "Movies", "JianyingPro", "User Data", "Projects", "com.lveditor.draft"
+        )
     else:
         # ---- Windows ----
         local_app_data = os.environ.get("LOCALAPPDATA")

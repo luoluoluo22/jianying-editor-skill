@@ -1,9 +1,42 @@
 import os
+import json
+import subprocess
 import uuid
-import pymediainfo
+try:
+    import pymediainfo
+except ImportError:
+    pymediainfo = None
 
 from typing import Optional, Literal
 from typing import Dict, Any
+
+
+def _probe_media(path: str) -> Dict[str, Any]:
+    """Probe media with ffprobe when pymediainfo/libmediainfo is unavailable."""
+    cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-show_streams",
+        "-of",
+        "json",
+        path,
+    ]
+    res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=15)
+    if res.returncode != 0:
+        raise ValueError(res.stderr.strip() or f"ffprobe failed for {path}")
+    return json.loads(res.stdout or "{}")
+
+
+def _duration_us(value: Any, fallback: Optional[int] = None) -> int:
+    try:
+        if value is not None:
+            return int(float(value) * 1_000_000)
+    except (TypeError, ValueError):
+        pass
+    return int(fallback or 10_000_000)
 
 class CropSettings:
     """素材的裁剪设置, 各属性均在0-1之间, 注意素材的坐标原点在左上角"""
@@ -81,8 +114,32 @@ class VideoMaterial:
         self.crop_settings = crop_settings
         self.local_material_id = ""
 
-        if not pymediainfo.MediaInfo.can_parse():
-            raise ValueError(f"不支持的视频素材类型 '{postfix}'")
+        if not pymediainfo or not pymediainfo.MediaInfo.can_parse():
+            probed = _probe_media(path)
+            streams = probed.get("streams", [])
+            video_stream = next((s for s in streams if s.get("codec_type") == "video"), None)
+            image_exts = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
+            if video_stream:
+                self.material_type = "video"
+                self.duration = _duration_us(
+                    video_stream.get("duration") or probed.get("format", {}).get("duration"),
+                    duration,
+                )
+                self.width = int(video_stream.get("width") or 1920)
+                self.height = int(video_stream.get("height") or 1080)
+                return
+            if postfix.lower() in image_exts:
+                self.material_type = "photo"
+                self.duration = duration or 10800000000
+                self.width = int((video_stream or {}).get("width") or 1920)
+                self.height = int((video_stream or {}).get("height") or 1080)
+                return
+            if duration is not None:
+                self.material_type = "video"
+                self.duration = duration
+                self.width, self.height = 1920, 1080
+                return
+            raise ValueError(f"输入的素材文件 {path} 没有视频轨道或图片轨道")
 
         try:
             info: pymediainfo.MediaInfo = \
@@ -209,8 +266,18 @@ class AudioMaterial:
         self.material_id = uuid.uuid4().hex
         self.path = path
 
-        if not pymediainfo.MediaInfo.can_parse():
-            raise ValueError("不支持的音频素材类型 %s" % os.path.splitext(path)[1])
+        if not pymediainfo or not pymediainfo.MediaInfo.can_parse():
+            probed = _probe_media(path)
+            streams = probed.get("streams", [])
+            if any(s.get("codec_type") == "video" for s in streams):
+                raise ValueError("音频素材不应包含视频轨道")
+            audio_stream = next((s for s in streams if s.get("codec_type") == "audio"), None)
+            if not audio_stream:
+                raise ValueError(f"给定的素材文件 {path} 没有音频轨道")
+            self.duration = _duration_us(
+                audio_stream.get("duration") or probed.get("format", {}).get("duration")
+            )
+            return
         info: pymediainfo.MediaInfo = pymediainfo.MediaInfo.parse(path)  # type: ignore
         if len(info.video_tracks):
             raise ValueError("音频素材不应包含视频轨道")

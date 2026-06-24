@@ -1,11 +1,13 @@
 import os
+import shutil
+import sys
 from typing import Union
 
 import pyJianYingDraft as draft
 from pyJianYingDraft import trange
 from pyJianYingDraft.exceptions import SegmentOverlap
 from utils.formatters import get_duration_ffprobe_cached, safe_tim
-from utils.media_normalizer import normalize_webm_for_jianying
+from utils.media_normalizer import normalize_video_for_jianying, normalize_webm_for_jianying
 
 
 class MediaOpsMixin:
@@ -35,6 +37,13 @@ class MediaOpsMixin:
                 return None
             media_path = normalized_path
             ext = ".mp4"
+        elif ext in [".mp4", ".mov", ".m4v"]:
+            normalized_path = normalize_video_for_jianying(media_path)
+            if normalized_path:
+                media_path = normalized_path
+                ext = os.path.splitext(media_path)[1].lower()
+
+        media_path = self._stage_media_for_jianying(media_path)
 
         if ext in [".mp3", ".wav", ".aac", ".flac", ".m4a", ".ogg"]:
             return self.add_audio_safe(media_path, start_time, duration, track_name or "AudioTrack")
@@ -42,6 +51,44 @@ class MediaOpsMixin:
         return self._add_video_safe(
             media_path, start_time, duration, track_name or "VideoTrack", source_start=source_start
         )
+
+    def _stage_media_for_jianying(self, media_path: str) -> str:
+        """
+        macOS 剪映是沙盒应用，草稿引用项目目录里的文件时经常没有访问权限。
+        将素材复制到草稿目录内部，避免打开草稿后提示“无访问权限/媒体格式不支持”。
+        """
+        if sys.platform != "darwin":
+            return media_path
+
+        draft_dir = getattr(self, "draft_dir", "")
+        if not draft_dir:
+            return media_path
+
+        abs_media = os.path.abspath(media_path)
+        abs_draft = os.path.abspath(draft_dir)
+        try:
+            if os.path.commonpath([abs_draft, abs_media]) == abs_draft:
+                return abs_media
+        except ValueError:
+            pass
+
+        media_dir = os.path.join(abs_draft, "media")
+        os.makedirs(media_dir, exist_ok=True)
+
+        base, ext = os.path.splitext(os.path.basename(abs_media))
+        safe_base = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in base)
+        staged = os.path.join(media_dir, f"{safe_base}{ext.lower()}")
+        if os.path.exists(staged) and os.path.getmtime(staged) >= os.path.getmtime(abs_media):
+            return staged
+
+        candidate = staged
+        index = 1
+        while os.path.exists(candidate) and not os.path.samefile(candidate, abs_media):
+            candidate = os.path.join(media_dir, f"{safe_base}_{index}{ext.lower()}")
+            index += 1
+
+        shutil.copy2(abs_media, candidate)
+        return candidate
 
     def add_audio_safe(
         self,

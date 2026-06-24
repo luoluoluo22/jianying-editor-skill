@@ -102,6 +102,7 @@ Use these templates and scripts for complex tasks:
   # For SRT only:
   python <SKILL_ROOT>/scripts/jy_wrapper.py export-srt --name "DraftName"
   ```
+  Note: MP4 auto export uses Windows UI Automation. On macOS, generate the draft and export it manually from JianYing.
 - **Template Clone & Replacer**: 安全克隆模板并批量替换物料 (防止损坏原模板):
   ```bash
   # 克隆模板生成新项目
@@ -124,10 +125,12 @@ env_root = os.getenv("JY_SKILL_ROOT", "").strip()
 # 探测 Skill 路径 (支持 Antigravity, Trae, Claude 等)
 skill_root = next((p for p in [
     env_root,
+    os.path.join(current_dir, ".agents", "skills", "jianying-editor"),
     os.path.join(current_dir, ".agent", "skills", "jianying-editor"),
     os.path.join(current_dir, ".trae", "skills", "jianying-editor"),
     os.path.join(current_dir, ".claude", "skills", "jianying-editor"),
     os.path.join(current_dir, "skills", "jianying-editor"),
+    os.path.abspath(".agents/skills/jianying-editor"),
     os.path.abspath(".agent/skills/jianying-editor"),
     os.path.abspath(".trae/skills/jianying-editor"),
     os.path.abspath(".claude/skills/jianying-editor"),

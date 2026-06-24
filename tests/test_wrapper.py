@@ -21,6 +21,7 @@ from core.mocking_ops import MockAudioMaterial, MockVideoMaterial
 from draft_inspector import cmd_summary
 from jy_wrapper import JyProject, draft
 from utils.formatters import safe_tim
+from utils.media_normalizer import should_normalize_video_for_jianying
 
 
 class TestJyWrapper(unittest.TestCase):
@@ -251,6 +252,41 @@ class TestJyWrapper(unittest.TestCase):
         )
         self.assertEqual(asset["url"], url)
         mocked_post.assert_called()
+
+    def test_16_macos_media_staging_copies_into_draft_dir(self):
+        """测试 macOS 下素材会复制进草稿目录内部，避免剪映沙盒权限问题"""
+        p = JyProject("TestMacStage", drafts_root=self.test_output, overwrite=True)
+
+        with patch("core.media_ops.sys.platform", "darwin"):
+            staged = p._stage_media_for_jianying(self.test_media)
+
+        self.assertTrue(staged.startswith(os.path.join(p.draft_dir, "media")))
+        self.assertTrue(os.path.exists(staged))
+        self.assertNotEqual(os.path.abspath(self.test_media), os.path.abspath(staged))
+
+    def test_17_video_normalizer_detects_jianying_unfriendly_geometry(self):
+        """测试非常规视频参数会触发剪映兼容转码"""
+        with patch(
+            "utils.media_normalizer._probe_video",
+            return_value={
+                "codec_name": "h264",
+                "pix_fmt": "yuv420p",
+                "width": 2046,
+                "height": 1080,
+            },
+        ):
+            self.assertTrue(should_normalize_video_for_jianying("bad.mp4"))
+
+        with patch(
+            "utils.media_normalizer._probe_video",
+            return_value={
+                "codec_name": "h264",
+                "pix_fmt": "yuv420p",
+                "width": 1920,
+                "height": 1080,
+            },
+        ):
+            self.assertFalse(should_normalize_video_for_jianying("ok.mp4"))
 
     @classmethod
     def tearDownClass(cls):
