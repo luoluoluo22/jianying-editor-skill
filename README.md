@@ -10,16 +10,16 @@
 
 ## 平台支持状态（请先阅读）
 
-目前推荐环境是 **Windows + 剪映专业版 5.9 或更低版本**。这是当前开发、测试和自动导出覆盖最完整的组合。
+草稿生成支持 Windows 和 macOS 的桌面版剪映专业版。自动导出属于额外 UI 自动化能力，目前仍以 Windows 老版本剪映为主。
 
 | 平台 | 当前状态 | 说明 |
 | --- | --- | --- |
-| Windows | 推荐使用 | 支持草稿生成、素材导入、字幕、配音、云端素材下载、录屏和自动导出。自动导出依赖剪映 5.9 或更低版本。 |
-| macOS | 实验性支持 | 已做路径探测、草稿目录和 FFmpeg/录屏相关适配，但没有完整端到端验证；自动导出不支持 macOS，需要在剪映里手动导出。 |
+| Windows | 推荐使用 | 支持草稿生成、素材导入、字幕、配音、云端素材下载、录屏和自动导出。自动导出依赖 Windows UI Automation，在剪映 5.9 或更低版本上最稳。 |
+| macOS | 支持草稿生成 | 支持新版草稿目录探测、`draft_info.json` 草稿生成、FFmpeg 媒体解析兜底和录屏相关适配；自动导出不支持 macOS，需要在剪映里手动导出。 |
 | CapCut 国际版 | 不支持 | 当前只适配国内版剪映专业版（JianyingPro），不要按本项目流程尝试 CapCut 国际版。 |
 | 手机端剪映 | 不支持 | 仅面向桌面版草稿工程。 |
 
-如果你是 Mac 用户，请把本项目当作“可尝试生成草稿”的实验功能，而不是完整可交付链路。遇到草稿无法识别、素材路径不兼容或导出问题时，建议切换到 Windows 环境继续验证，避免在 Mac 端反复排查自动导出。
+如果你是 Mac 用户，请把本项目用于自动搭建剪映时间轴；最终渲染导出在剪映内手动完成。
 
 ### 能做什么
 
@@ -33,7 +33,7 @@
 | **网页动效转视频**  | 用 HTML/JS/Canvas 写动画，自动录屏变成视频素材导入剪映 |
 | **录屏 + 智能变焦** | 录制屏幕操作，自动给鼠标点击位置加缩放和红圈标记       |
 | **影视解说**        | AI 分析视频内容，自动生成分镜脚本并合成解说视频        |
-| **自动导出**        | 剪完直接导出 MP4，支持 1080P 到 4K                     |
+| **自动导出**        | Windows UI 自动化导出 MP4，macOS 生成草稿后手动导出    |
 | **关键帧动画**      | 缩放、位移、透明度等关键帧，做出运镜效果               |
 | **复合片段**        | 像嵌套工程一样，把多个子项目组合成一个完整视频         |
 
@@ -42,8 +42,8 @@
 - **不是剪映的替代品** -- 最终的视频渲染、预览回放还是靠剪映本身完成的，这个工具负责的是"自动帮你把时间轴搭好"，帮你点击导出
 - **不能用剪映的实时特效** -- 像智能抠图、美颜、语音识别字幕这些需要剪映 GPU 实时处理的功能，目前无法通过代码调用
 - **不能操作剪映的全部 UI 按钮** -- "一键成片""图文成片"这类剪映内置的 AI 功能暂时没法自动触发
-- **自动导出依赖老版本** -- 自动导出功能目前只支持 **剪映 5.9 及以下版本**（6.0+ 弹窗太多会干扰自动化脚本）
-- **Mac 端不是完整支持** -- macOS 目前只做了部分路径、草稿和录屏适配，缺少完整端到端验证，且不支持自动导出
+- **自动导出依赖 Windows UI 自动化** -- 自动导出功能目前只支持 Windows；剪映 5.9 及以下版本最稳，新版本可能受弹窗或控件变化影响
+- **Mac 端需要手动导出** -- macOS 支持生成草稿和导入素材，但不支持自动点击剪映导出
 - **不支持手机端剪映 / CapCut 国际版** -- 只能配合国内版桌面剪映专业版使用
 
 ## 🚀 快速开始 (Quick Start)
@@ -80,11 +80,8 @@ git clone https://github.com/luoluoluo22/jianying-editor-skill.git .claude/skill
 git clone https://github.com/luoluoluo22/jianying-editor-skill.git skills/jianying-editor
 ```
 
-### 3. 🛠️ 资源下载与版本准备 (Essential Resources)
-⚠️ **重要提示**：本 Skill 的自动导出功能深度依赖 **剪映 5.9** (或更低版本)。
-
-⬇️ **[点击下载 剪映专业版 5.9 (夸克网盘)](https://pan.quark.cn/s/81566e9c6e08)**
-*(下载后请按照说明禁止更新)*
+### 3. 🛠️ 版本准备 (Essential Resources)
+草稿生成优先适配新版剪映的 `draft_info.json` 草稿结构。只有需要无人值守自动导出时，才建议准备 Windows + 剪映 5.9 或更低版本。
 
 ### 4. 试试这样跟 AI 说 (Use Cases)
 
@@ -136,11 +133,11 @@ playwright install chromium
 Skill 默认会自动探测您的剪映安装位置，如果探测失败，请在使用时直接告诉 AI：
 
 - **Windows**: `C:\Users\Administrator\AppData\Local\JianyingPro\User Data\Projects\com.lveditor.draft`
-- **macOS（实验性）**: `/Users/你的用户名/Movies/JianyingPro/User Data/Projects/com.lveditor.draft`
+- **macOS**: `/Users/你的用户名/Movies/JianyingPro/User Data/Projects/com.lveditor.draft`
 
 > "我的剪映草稿目录在 D:\JianyingPro\..."
 
-> Mac 用户注意：如果你的剪映实际草稿目录不是上面的路径，请优先手动确认草稿目录。即使草稿生成成功，导出仍需要打开剪映手动完成。
+> Mac 用户注意：如果你的剪映实际草稿目录不是上面的路径，请优先手动确认草稿目录。导出需要打开剪映手动完成。
 
 ## 📂 文件夹说明
 
@@ -158,7 +155,7 @@ Skill 默认会自动探测您的剪映安装位置，如果探测失败，请�
 2. **自动导出失败？**
    自动导出脚本模拟了鼠标键盘操作。
    - 运行导出时，请**不要**动鼠标和键盘。
-   - 目前仅支持 **Windows + 剪映 5.9 或更早版本** (新版本弹窗太多容易干扰脚本)。
+   - 目前仅支持 **Windows**，剪映 5.9 或更早版本最稳。
    - macOS 不支持自动导出，请在剪映中手动导出。
 
 ## 🔄 如何更新 (Update)
@@ -174,10 +171,17 @@ git pull
 
 最新版本请直接查看 [CHANGELOG.md](CHANGELOG.md) 与 [VERSION](VERSION)。
 
+### v1.6 (2026-06-24) - macOS 新版剪映草稿适配
+- **macOS 草稿生成适配**:
+  - 优先探测 `~/Movies/JianyingPro/User Data/Projects/com.lveditor.draft`。
+  - 支持 `.agents/skills/jianying-editor` 安装路径。
+  - `pymediainfo` 不可用时自动使用 `ffprobe` 解析视频/音频素材。
+  - 自动导出入口在 macOS 上返回明确提示，避免误跑 Windows UI 自动化。
+
 ### v1.5 (2026-04-19) - macOS 初步适配与安全加固
-- **macOS 实验性适配**:
+- **macOS 初步适配**:
   - 优化了 macOS 下的路径探测逻辑，兼顾 Apple Silicon 和 Intel Mac。
-  - 录屏与智能变焦功能接入 `avfoundation`，但完整剪辑到导出的端到端链路仍以 Windows 为准。
+  - 录屏与智能变焦功能接入 `avfoundation`。
 - **🛡️ 安全与健壮性 (Security & Robustness)**:
   - **工程自修复 (Auto-healing)**：自动检测并修复损坏的或旧版的剪映工程文件。
   - **路径加固**：防止非法路径穿越，保护本地文件安全。

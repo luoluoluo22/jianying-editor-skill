@@ -13,7 +13,9 @@ Use this SOP for simple editing requests to minimize noisy exploration.
 ### macOS
 ```bash
 python3 --version
-ls ~/Movies/JianyingPro\ Drafts/ 2>/dev/null || echo "Draft path not found"
+ls ~/Movies/JianyingPro/User\ Data/Projects/com.lveditor.draft 2>/dev/null || \
+  ls ~/Movies/JianyingPro\ Drafts/ 2>/dev/null || \
+  echo "Draft path not found"
 ```
 
 ### Windows
@@ -28,7 +30,8 @@ If draft path differs, set `JY_PROJECTS_ROOT` and continue.
 
 ### macOS
 ```bash
-ls .agent/skills/jianying-editor/assets/
+ls .agents/skills/jianying-editor/assets/ 2>/dev/null || \
+  ls .agent/skills/jianying-editor/assets/
 ```
 
 ### Windows
