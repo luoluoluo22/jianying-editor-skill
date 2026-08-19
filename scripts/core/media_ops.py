@@ -1,4 +1,6 @@
 import os
+import hashlib
+import shutil
 from typing import Union
 
 import pyJianYingDraft as draft
@@ -36,12 +38,36 @@ class MediaOpsMixin:
             media_path = normalized_path
             ext = ".mp4"
 
+        # 复制进草稿目录，保证 path 指向的文件稳定存在（防止源文件被清理导致“媒体丢失”）
+        media_path = self._stage_local_asset(media_path)
+
         if ext in [".mp3", ".wav", ".aac", ".flac", ".m4a", ".ogg"]:
             return self.add_audio_safe(media_path, start_time, duration, track_name or "AudioTrack")
 
         return self._add_video_safe(
             media_path, start_time, duration, track_name or "VideoTrack", source_start=source_start
         )
+
+    def _stage_local_asset(self, media_path: str) -> str:
+        """把本地素材复制进草稿目录的 materials/ 子目录，返回副本绝对路径。
+
+        剪映按 draft_info.json 里的 path 定位本地素材；若 path 指向项目外部的
+        临时输出目录，源文件一旦被清理就会触发“媒体丢失”。复制进草稿目录可让
+        草稿自包含、路径稳定。
+        """
+        try:
+            materials_dir = os.path.join(self.draft_dir, "materials")
+            os.makedirs(materials_dir, exist_ok=True)
+            ext = os.path.splitext(media_path)[1].lower()
+            digest = hashlib.md5(os.path.abspath(media_path).encode("utf-8")).hexdigest()
+            staged = os.path.join(materials_dir, f"{digest}{ext}")
+            if os.path.exists(staged) and os.path.getsize(staged) == os.path.getsize(media_path):
+                return staged
+            shutil.copy2(media_path, staged)
+            return staged
+        except Exception as e:
+            print(f"⚠️ 素材复制进草稿目录失败，回退使用源路径: {e}")
+            return media_path
 
     def add_audio_safe(
         self,
@@ -162,49 +188,16 @@ class MediaOpsMixin:
         if start_time is None:
             start_time = self.get_track_duration(track_name)
 
-        # 优先使用真实本地缓存文件，避免生成虚拟路径导致“媒体丢失”提示。
-        # 若下载失败，再回退到旧的 mock 注入模式。
+        # 仅使用真实下载的本地缓存文件。虚拟路径（如 cloud_music_xxx.mp3）在磁盘上
+        # 并不存在，会直接触发剪映“检测到媒体丢失”。下载失败时直接报错返回。
         local_path = self.cloud_manager.download_asset(query)
-        if local_path and os.path.exists(local_path):
-            seg = self.add_audio_safe(
-                local_path, start_time=start_time, duration=duration, track_name=track_name
-            )
-            if seg is not None:
-                return seg
+        if not local_path or not os.path.exists(local_path):
+            print(f"❌ Cloud music download failed: '{query}'. Aborted to avoid media-missing error.")
+            return None
 
-        # 1. 如果没给 duration_s，尝试查表
-        actual_duration_s = duration_s
-        if not actual_duration_s:
-            actual_duration_s = self.cloud_manager.get_asset_duration(query)
-
-        if not actual_duration_s:
-            print(f"⚠️ Warning: Duration for cloud music '{query}' not found. Using fallback 3.0s")
-            actual_duration_s = 3.0
-
-        final_dur_us = safe_tim(duration) if duration else int(actual_duration_s * 1000000)
-
-        # 2. 注入 Patch
-        dummy_path = (
-            local_path
-            if (local_path and os.path.exists(local_path))
-            else f"cloud_music_{query}.mp3"
+        return self.add_audio_safe(
+            local_path, start_time=start_time, duration=duration, track_name=track_name
         )
-        self._cloud_audio_patches[dummy_path] = {"id": query, "type": "music"}
-
-        # 3. 使用 Mock 素材
-        from core.mocking_ops import MockAudioMaterial
-
-        mat = MockAudioMaterial(query, final_dur_us, name or f"CloudMusic_{query}", dummy_path)
-        seg = draft.AudioSegment(
-            mat,
-            draft.Timerange(safe_tim(start_time), final_dur_us),
-            source_timerange=draft.Timerange(0, final_dur_us),
-        )
-
-        self._ensure_track(draft.TrackType.audio, track_name)
-        target_track = self._find_available_audio_track_name(track_name, seg)
-        self.script.add_segment(seg, target_track)
-        return seg
 
     def _find_available_audio_track_name(self, base_track_name: str, segment) -> str:
         preferred = base_track_name or "AudioTrack"

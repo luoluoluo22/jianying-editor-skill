@@ -79,7 +79,9 @@ class VideoMaterial:
         self.material_id = uuid.uuid4().hex
         self.path = path
         self.crop_settings = crop_settings
-        self.local_material_id = ""
+        # 剪映 v5.9+ 需要非空的本地素材登记 id；用文件名 stem 保证与素材文件一一对应，
+        # 且与 _stage_local_asset 复制的副本文件名（md5(源路径)）保持一致。
+        self.local_material_id = os.path.splitext(os.path.basename(self.path))[0]
 
         if not pymediainfo.MediaInfo.can_parse():
             raise ValueError(f"不支持的视频素材类型 '{postfix}'")
@@ -208,6 +210,7 @@ class AudioMaterial:
         self.material_name = material_name if material_name else os.path.basename(path)
         self.material_id = uuid.uuid4().hex
         self.path = path
+        self.local_material_id = os.path.splitext(os.path.basename(self.path))[0]
 
         if not pymediainfo.MediaInfo.can_parse():
             raise ValueError("不支持的音频素材类型 %s" % os.path.splitext(path)[1])
@@ -229,7 +232,7 @@ class AudioMaterial:
             "effect_id": "",
             "formula_id": "",
             "id": self.material_id,
-            "local_material_id": self.material_id,
+            "local_material_id": self.local_material_id,
             "music_id": self.material_id,
             "name": self.material_name,
             "path": self.path,
