@@ -79,6 +79,8 @@ class TextOpsMixin:
         添加富文本字幕，支持按关键词高亮。
         highlights 格式: [{"word": "99%", "color": (1,0,0), "bold": True}, ...]
         """
+        base_style = kwargs.setdefault("style", draft.TextStyle(size=5.0))
+
         spans = []
         for h in highlights:
             word = h.get("word")
@@ -103,8 +105,28 @@ class TextOpsMixin:
                 spans.append(span)
                 start = idx + len(word)
 
-        kwargs["rich_spans"] = spans
+        kwargs["rich_spans"] = self._fill_span_gaps(text, spans, base_style)
         return self.add_text_simple(text, start_time, duration, track_name, **kwargs)
+
+    @staticmethod
+    def _fill_span_gaps(text: str, spans: list, base_style) -> list:
+        """把未被高亮覆盖的区间补成默认样式 span。
+
+        底层库一旦发现 `rich_spans` 非空，就只渲染 span 覆盖到的字符样式，
+        未覆盖的字会丢掉字号等基础样式，故这里补满整行。
+        """
+        if not spans:
+            return spans
+
+        filled, cursor = [], 0
+        for span in sorted(spans, key=lambda s: s.start):
+            if span.start > cursor:
+                filled.append(draft.RichTextSpan(cursor, span.start, style=base_style))
+            filled.append(span)
+            cursor = max(cursor, span.end)
+        if cursor < len(text):
+            filled.append(draft.RichTextSpan(cursor, len(text), style=base_style))
+        return filled
 
     def set_subtitle_keywords(self, keywords_config: dict):
         """设置字幕关键词高亮配置，注入 draft_info.json 的 config 节点"""

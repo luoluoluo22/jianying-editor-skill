@@ -2,6 +2,7 @@ import os
 import re
 import shutil
 import time
+from typing import Optional
 
 import pyJianYingDraft as draft
 from utils.formatters import get_default_drafts_root
@@ -18,8 +19,9 @@ class JyProjectBase:
     def __init__(
         self,
         project_name: str,
-        width: int = 1920,
-        height: int = 1080,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+        fps: int = 30,
         drafts_root: str = None,
         overwrite: bool = True,
         script_instance=None,
@@ -40,7 +42,10 @@ class JyProjectBase:
         self._cloud_audio_patches = {}
         self._cloud_text_patches = {}
 
-        self._explicit_res = width != 1920 or height != 1080
+        # 显式传入分辨率即视为用户指定，首个素材不得再改写；未传则跟随首个素材。
+        self._explicit_res = width is not None or height is not None
+        width = 1920 if width is None else width
+        height = 1080 if height is None else height
         self._first_video_resolved = False
         self._cloud_manager = None
 
@@ -78,14 +83,16 @@ class JyProjectBase:
                 self.script = self.df.load_template(self.name)
             except Exception as e:
                 print(f"Load failed ({e}), forcing recreate...")
-                self.script = self.df.create_draft(self.name, width, height, allow_replace=True)
+                self.script = self.df.create_draft(
+                    self.name, width, height, fps, allow_replace=True
+                )
         else:
             print(f"Creating new project: {self.name}")
             max_retries = 3
             for attempt in range(max_retries):
                 try:
                     self.script = self.df.create_draft(
-                        self.name, width, height, allow_replace=overwrite
+                        self.name, width, height, fps, allow_replace=overwrite
                     )
                     break
                 except PermissionError:

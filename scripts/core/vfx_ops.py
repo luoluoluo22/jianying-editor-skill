@@ -20,6 +20,37 @@ class VfxOpsMixin:
         self.script.add_segment(seg, track_name)
         return seg
 
+    def add_picture_fade(
+        self,
+        video_segment: draft.VideoSegment,
+        in_duration: Union[str, int] = 0,
+        out_duration: Union[str, int] = 0,
+    ) -> Optional[draft.VideoSegment]:
+        """为视频片段添加**画面**淡入淡出。
+
+        底层 `VideoSegment.add_fade()` 只写音频淡化（落入 `materials.audio_fades`），
+        画面不受影响；画面淡化须由 alpha 关键帧完成，故单独提供本方法。
+        两条视频轨重叠时，对上层片段调用本方法即可得到交叉溶解。
+        """
+        if video_segment is None:
+            return None
+
+        fade_in = safe_tim(in_duration)
+        fade_out = safe_tim(out_duration)
+        duration = video_segment.duration
+        if fade_in + fade_out > duration:
+            print(f"⚠️ 淡化时长 {(fade_in + fade_out) / 1e6:.2f}s 超过片段长度，已跳过")
+            return video_segment
+
+        alpha = draft.KeyframeProperty.alpha
+        if fade_in > 0:
+            video_segment.add_keyframe(alpha, 0, 0.0)
+            video_segment.add_keyframe(alpha, fade_in, 1.0)
+        if fade_out > 0:
+            video_segment.add_keyframe(alpha, duration - fade_out, 1.0)
+            video_segment.add_keyframe(alpha, duration, 0.0)
+        return video_segment
+
     def add_transition_simple(
         self,
         transition_name: str,

@@ -64,7 +64,7 @@ class MediaOpsMixin:
         """
         try:
             draft_dir = getattr(self, "draft_dir", "")
-            if not draft_dir:
+            if not draft_dir or not os.path.isfile(media_path):
                 return media_path
 
             abs_media = os.path.abspath(media_path)
@@ -107,6 +107,9 @@ class MediaOpsMixin:
         if start_time is None:
             start_time = self.get_track_duration(track_name)
         self._ensure_track(draft.TrackType.audio, track_name)
+
+        # 音频同样复制进草稿目录：云音乐缓存在 ~/cloud_cache，macOS 沙盒下会丢失
+        media_path = self._stage_local_asset(media_path)
 
         try:
             mat = draft.AudioMaterial(media_path)
@@ -251,12 +254,21 @@ class MediaOpsMixin:
         except SegmentOverlap:
             return False
 
-    def _ensure_track(self, track_type, track_name):
-        """确保轨道存在，不存在则创建。"""
+    def _ensure_track(self, track_type, track_name, relative_index=None):
+        """确保轨道存在，不存在则创建。
+
+        同类型轨道若共用同一个 relative_index，render_index 会完全相同，
+        剪映里的图层遮挡顺序就变得不确定；故默认按已有同类型轨道数递增分层。
+        """
         if not track_name:
             return
-        if track_name not in self.script.tracks:
-            self.script.add_track(track_type, track_name)
+        if track_name in self.script.tracks:
+            return
+        if relative_index is None:
+            relative_index = sum(
+                1 for t in self.script.tracks.values() if t.track_type == track_type
+            )
+        self.script.add_track(track_type, track_name, relative_index=relative_index)
 
     def _calculate_duration(self, req_dur, phys_dur_available):
         """计算实际应用时长，带容错。"""
