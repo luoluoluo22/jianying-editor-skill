@@ -19,6 +19,13 @@ project = JyProject("Horizontal_Project")
 
 # 竖屏 (9:16)：必须在初始时指定，否则会有黑边
 project = JyProject("Portrait_Project", width=1080, height=1920)
+
+# 省略 width/height 时，工程分辨率跟随第一个导入的素材；
+# 要锁定 1080p 就显式传，别依赖默认值。
+project = JyProject("Locked_1080p", width=1920, height=1080)
+
+# 帧率默认 30，与素材不一致会产生重复帧；24fps 素材应显式指定
+project = JyProject("Cinematic_24", width=1920, height=1080, fps=24)
 ```
 
 

@@ -21,7 +21,11 @@ from core.mocking_ops import MockAudioMaterial, MockVideoMaterial
 from draft_inspector import cmd_summary
 from jy_wrapper import JyProject, draft
 from utils.formatters import safe_tim
-from utils.media_normalizer import should_normalize_video_for_jianying
+from utils.media_normalizer import (
+    jianying_target_geometry,
+    normalize_video_for_jianying,
+    should_normalize_video_for_jianying,
+)
 
 
 class TestJyWrapper(unittest.TestCase):
@@ -311,6 +315,135 @@ class TestJyWrapper(unittest.TestCase):
             tracks = [t for t in p.script.tracks if t.type == draft.TrackType.audio]
             for t in tracks:
                 self.assertEqual(len(t.segments), 0)
+
+    def test_20_explicit_resolution_survives_smaller_source(self):
+        """测试显式指定 1920x1080 后，导入 720p 素材不会把工程打回 720p"""
+        p = JyProject(
+            "TestExplicitRes",
+            drafts_root=self.test_output,
+            width=1920,
+            height=1080,
+            overwrite=True,
+        )
+
+        def fake_video_material(path, duration=None):
+            mat = MockVideoMaterial("mat_720p", 3000000, "Video", path)
+            mat.width, mat.height = 1280, 720
+            return mat
+
+        with patch("core.media_ops.draft.VideoMaterial", side_effect=fake_video_material):
+            p.add_media_safe(self.test_media, "0s", "3s", track_name="V1")
+
+        self.assertEqual((p.script.width, p.script.height), (1920, 1080))
+
+    def test_21_fps_is_configurable(self):
+        """测试 fps 可指定并写入工程，而非恒为 30"""
+        p = JyProject("TestFps", drafts_root=self.test_output, fps=24, overwrite=True)
+        self.assertEqual(p.script.fps, 24)
+
+    def test_22_picture_fade_writes_alpha_keyframes(self):
+        """测试画面淡化写 alpha 关键帧（底层 add_fade 只作用于声音）"""
+        p = JyProject("TestPictureFade", drafts_root=self.test_output, overwrite=True)
+        p._ensure_track(draft.TrackType.video, "V1")
+        mat = MockVideoMaterial("picture_fade_mat", 4000000, "Video", "video.mp4")
+        mat.width, mat.height = 1920, 1080
+        seg = draft.VideoSegment(mat, draft.trange(0, 4000000))
+        p.script.add_segment(seg, "V1")
+
+        p.add_picture_fade(seg, "0.5s", "0.8s")
+
+        alpha_lists = [
+            kl
+            for kl in seg.common_keyframes
+            if kl.keyframe_property == draft.KeyframeProperty.alpha
+        ]
+        self.assertEqual(len(alpha_lists), 1)
+        points = [(kf.time_offset, kf.values[0]) for kf in alpha_lists[0].keyframes]
+        self.assertEqual(points, [(0, 0.0), (500000, 1.0), (3200000, 1.0), (4000000, 0.0)])
+        # 画面淡化不应顺带写音频淡化
+        self.assertIsNone(seg.fade)
+
+    def test_23_normalize_geometry_keeps_aspect_ratio(self):
+        """测试转码目标尺寸补齐到剪映要求而不拉伸成 1920x1080"""
+        # 竖屏：宽补到 16 的倍数，高不变，仍是竖屏
+        self.assertEqual(jianying_target_geometry(1080, 1920), (1088, 1920))
+        # 已合规的尺寸不动
+        self.assertEqual(jianying_target_geometry(1280, 720), (1280, 720))
+        self.assertEqual(jianying_target_geometry(1920, 1080), (1920, 1080))
+        # 奇数高补成偶数
+        self.assertEqual(jianying_target_geometry(640, 481), (640, 482))
+
+    def test_24_normalize_pads_instead_of_scaling_to_1080p(self):
+        """测试转码命令用 pad 补边而非 scale 拉伸，避免竖屏被压成横屏小条"""
+        captured = {}
+
+        class Proc:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        def fake_run(cmd, **kwargs):
+            captured["cmd"] = cmd
+            open(cmd[-1], "wb").write(b"\x00")
+            return Proc()
+
+        src = os.path.join(self.test_output, "portrait.mp4")
+        with open(src, "wb") as f:
+            f.write(b"\x00" * 16)
+
+        with patch(
+            "utils.media_normalizer._probe_video",
+            return_value={
+                "codec_name": "hevc",
+                "pix_fmt": "yuv420p10le",
+                "width": 1080,
+                "height": 1920,
+            },
+        ), patch("utils.media_normalizer.subprocess.run", side_effect=fake_run):
+            normalize_video_for_jianying(src)
+
+        vf = captured["cmd"][captured["cmd"].index("-vf") + 1]
+        self.assertNotIn("scale=1920:1080", vf)
+        self.assertIn("1088", vf)
+        self.assertIn("1920", vf)
+
+    def test_25_rich_text_spans_cover_whole_line(self):
+        """测试富文本高亮后，非高亮文字仍有样式（底层库只渲染 span 覆盖的字）"""
+        p = JyProject("TestRichText", drafts_root=self.test_output, overwrite=True)
+        text = "增长达到99%创下新高"
+        seg = p.add_rich_text(text, [{"word": "99%", "color": (1.0, 0.0, 0.0), "bold": True}])
+
+        spans = sorted(seg.rich_spans, key=lambda s: s.start)
+        self.assertEqual(spans[0].start, 0)
+        self.assertEqual(spans[-1].end, len(text))
+        for prev, nxt in zip(spans, spans[1:]):
+            self.assertEqual(prev.end, nxt.start, "span 之间不应有未覆盖的空隙")
+
+    def test_26_audio_is_staged_into_draft_dir(self):
+        """测试音频同样复制进草稿目录，避免 macOS 沙盒下媒体丢失"""
+        p = JyProject("TestAudioStage", drafts_root=self.test_output, overwrite=True)
+        src = os.path.join(self.test_output, "bgm.mp3")
+        with open(src, "wb") as f:
+            f.write(b"\x00" * 64)
+
+        def fake_audio_material(path):
+            return MockAudioMaterial("bgm_mat", 3000000, "BGM", path)
+
+        with patch("core.media_ops.draft.AudioMaterial", side_effect=fake_audio_material):
+            seg = p.add_audio_safe(src, "0s", "2s", track_name="BGM")
+
+        self.assertIsNotNone(seg)
+        self.assertTrue(seg.material_instance.path.startswith(p.draft_dir))
+
+    def test_27_same_type_tracks_get_distinct_layers(self):
+        """测试同类型轨道自动分层，避免 render_index 相同导致遮挡顺序不确定"""
+        p = JyProject("TestTrackLayer", drafts_root=self.test_output, overwrite=True)
+        p._ensure_track(draft.TrackType.video, "Bottom")
+        p._ensure_track(draft.TrackType.video, "Top")
+
+        bottom = p.script.tracks["Bottom"].render_index
+        top = p.script.tracks["Top"].render_index
+        self.assertGreater(top, bottom, "后建的同类型轨道应位于更上层")
 
     @classmethod
     def tearDownClass(cls):

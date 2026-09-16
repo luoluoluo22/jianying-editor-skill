@@ -1,7 +1,7 @@
 import os
 import json
 import subprocess
-from typing import Optional
+from typing import Optional, Tuple
 
 
 def _norm_output_path(input_path: str) -> str:
@@ -61,6 +61,17 @@ def should_normalize_video_for_jianying(input_path: str) -> bool:
     )
 
 
+def jianying_target_geometry(width: int, height: int) -> Tuple[int, int]:
+    """剪映要求宽为 16 的倍数、高为偶数。
+
+    补齐到最近的合规尺寸即可，**不得**统一拉伸到 1920x1080：那会把竖屏素材
+    压成横屏里的一根小竖条。宽高比与画面内容在转码前后保持不变。
+    """
+    if width <= 0 or height <= 0:
+        return (1920, 1080)
+    return (((width + 15) // 16) * 16, ((height + 1) // 2) * 2)
+
+
 def normalize_video_for_jianying(input_path: str, force: bool = False) -> Optional[str]:
     """
     Convert video to JianYing-friendly MP4 before timeline import.
@@ -68,7 +79,8 @@ def normalize_video_for_jianying(input_path: str, force: bool = False) -> Option
     Output profile:
     - Video: H.264 (libx264), yuv420p
     - Audio: AAC (optional if source has audio)
-    - Geometry: 1920x1080 with padding when needed
+    - Geometry: padded to JianYing-compatible alignment, original aspect kept
+    - Frame rate: inherited from source
     """
     src = os.path.abspath(input_path)
     if not os.path.exists(src):
@@ -79,6 +91,11 @@ def normalize_video_for_jianying(input_path: str, force: bool = False) -> Option
     dst = _norm_output_path(src)
     if _is_cache_fresh(src, dst):
         return dst
+
+    info = _probe_video(src)
+    target_w, target_h = jianying_target_geometry(
+        int(info.get("width") or 0), int(info.get("height") or 0)
+    )
 
     cmd = [
         "ffmpeg",
@@ -93,10 +110,7 @@ def normalize_video_for_jianying(input_path: str, force: bool = False) -> Option
         "-map",
         "0:a?",
         "-vf",
-        "scale=1920:1080:force_original_aspect_ratio=decrease,"
-        "pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
-        "-r",
-        "30",
+        f"pad={target_w}:{target_h}:(ow-iw)/2:(oh-ih)/2",
         "-c:v",
         "libx264",
         "-pix_fmt",

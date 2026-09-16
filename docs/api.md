@@ -17,8 +17,11 @@ from jy_wrapper import JyProject
 ### Constructor
 
 ```python
-JyProject(project_name: str, width: int = 1920, height: int = 1080, drafts_root: str | None = None, overwrite: bool = True)
+JyProject(project_name: str, width: int | None = None, height: int | None = None, fps: int = 30, drafts_root: str | None = None, overwrite: bool = True)
 ```
+
+- `width` / `height`: 省略则工程分辨率跟随**第一个导入的素材**；一旦显式传入（哪怕正好是 `1920, 1080`）即锁定，后续素材不会再改写它。
+- `fps`: 工程帧率，默认 30。素材帧率与之不一致会产生重复帧，建议按主素材设置（如 24fps 素材传 `fps=24`）。
 
 ### Core Lifecycle
 
@@ -47,7 +50,12 @@ Do not pass `transform_y` directly as a top-level arg.
 
 - `add_effect_simple(effect_name, start_time=None, duration="3s", track_name="EffectTrack")`
 - `add_transition_simple(transition_name, video_segment=None, duration="1s", track_name=None)`
+- `add_picture_fade(video_segment, in_duration=0, out_duration=0)`
 - `add_web_asset_safe(html_path, start_time=None, duration="5s", track_name="WebVfxTrack", output_dir=None)`
+
+**画面淡化必须用 `add_picture_fade()`**，不要用底层的 `VideoSegment.add_fade()` —— 后者只写音频淡化
+（落入 `materials.audio_fades`），画面完全不受影响，且不会报错。两条视频轨重叠时，对上层片段调用
+`add_picture_fade()` 即得到交叉溶解。
 
 ## Minimal End-to-End Example
 
