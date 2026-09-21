@@ -1,5 +1,6 @@
 # ruff: noqa: E402
 
+import io
 import os
 import shutil
 import sys
@@ -317,6 +318,87 @@ class TestJyWrapper(unittest.TestCase):
         # 清理测试产物
         if os.path.exists(cls.test_output):
             shutil.rmtree(cls.test_output, ignore_errors=True)
+
+
+class TestWindowsStdoutEncoding(unittest.TestCase):
+    """Windows 默认 GBK 代码页下，含 emoji 的 print 不得抛 UnicodeEncodeError。"""
+
+    EMOJI_PRINTS = [
+        "\u2705 done",  # ✅
+        "\u274c failed",  # ❌
+        "\u2139\ufe0f info",  # ℹ️
+        "\U0001f389 party",  # 🎉
+    ]
+
+    def _make_gbk_stream(self):
+        """构造一个 GBK 编码、errors=strict 的输出流（模拟 Windows 默认代码页）。"""
+        return io.TextIOWrapper(io.BytesIO(), encoding="gbk", errors="strict")
+
+    def test_20_guard_relaxes_strict_gbk_stream(self):
+        """GBK + strict 流经 _guard_stdio_encoding 后，emoji 不再抛 UnicodeEncodeError"""
+        from utils.env_setup import _guard_stdio_encoding
+
+        buf = io.BytesIO()
+        stream = io.TextIOWrapper(buf, encoding="gbk", errors="strict")
+        self.assertEqual(stream.errors, "strict")
+
+        original = sys.stdout
+        sys.stdout = stream
+        try:
+            _guard_stdio_encoding()
+            for line in self.EMOJI_PRINTS:
+                print(line)
+            stream.flush()
+        finally:
+            sys.stdout = original
+
+        # 编码保持不变，仅 errors 策略被降级
+        self.assertEqual(stream.encoding.lower(), "gbk")
+        self.assertEqual(stream.errors, "replace")
+        # 不可编码字符被替换而不是中断进程
+        self.assertIn(b"?", buf.getvalue())
+
+    def test_21_guard_tolerates_stream_without_reconfigure(self):
+        """stdout 无 reconfigure 属性时 _guard_stdio_encoding 不得抛异常"""
+        from utils.env_setup import _guard_stdio_encoding
+
+        original = sys.stdout
+        sys.stdout = io.StringIO()
+        try:
+            _guard_stdio_encoding()  # 不抛异常即通过
+            self.assertFalse(hasattr(sys.stdout, "reconfigure"))
+        finally:
+            sys.stdout = original
+
+    def test_22_guard_leaves_utf8_stream_untouched(self):
+        """UTF-8 流的编码与输出内容必须保持原样，不被降级"""
+        from utils.env_setup import _guard_stdio_encoding
+
+        buf = io.BytesIO()
+        stream = io.TextIOWrapper(buf, encoding="utf-8", errors="strict")
+        original = sys.stdout
+        sys.stdout = stream
+        try:
+            _guard_stdio_encoding()
+            print("中文测试 ✅❌")
+            stream.flush()
+        finally:
+            sys.stdout = original
+
+        # 编码绝不被改写；UTF-8 下中文与 emoji 原样输出
+        self.assertEqual(stream.encoding.lower(), "utf-8")
+        expected = "中文测试 ✅❌".encode("utf-8") + os.linesep.encode("utf-8")
+        self.assertEqual(buf.getvalue(), expected)
+
+    def test_23_setup_env_is_idempotent(self):
+        """重复调用 setup_env() 不得抛异常，也不得重复注入 sys.path"""
+        from utils.env_setup import setup_env
+
+        setup_env()
+        setup_env()
+
+        scripts_entries = [p for p in sys.path if p.endswith("scripts")]
+        self.assertEqual(len(scripts_entries), len(set(scripts_entries)))
 
 
 if __name__ == "__main__":
