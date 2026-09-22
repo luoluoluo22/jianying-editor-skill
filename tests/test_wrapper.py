@@ -319,5 +319,58 @@ class TestJyWrapper(unittest.TestCase):
             shutil.rmtree(cls.test_output, ignore_errors=True)
 
 
+class TestMediaNormalizerWithoutFfprobe(unittest.TestCase):
+    """CI 镜像未安装 ffprobe 时，媒体探测必须降级而不是崩溃。"""
+
+    def setUp(self):
+        from utils.media_normalizer import _probe_video
+
+        self._probe_video = _probe_video
+        self._fake_video = os.path.join(current_dir, "output")
+        os.makedirs(self._fake_video, exist_ok=True)
+        self._fake_video = os.path.join(self._fake_video, "ffprobe_missing_probe.mp4")
+        with open(self._fake_video, "wb") as f:
+            f.write(b"\x00" * 1024)
+
+    def tearDown(self):
+        if os.path.exists(self._fake_video):
+            os.remove(self._fake_video)
+
+    def test_24_probe_returns_empty_when_ffprobe_missing(self):
+        """ffprobe 不存在时 _probe_video 返回空 dict，不抛 FileNotFoundError"""
+        with patch(
+            "utils.media_normalizer.subprocess.run",
+            side_effect=FileNotFoundError("[WinError 2] 系统找不到指定的文件。"),
+        ):
+            info = self._probe_video(self._fake_video)
+
+        self.assertEqual(info, {})
+
+    def test_25_should_not_normalize_when_ffprobe_missing(self):
+        """探测失败时 should_normalize 判 False，让导入走原始路径而不是中断"""
+        from utils.media_normalizer import should_normalize_video_for_jianying
+
+        with patch(
+            "utils.media_normalizer.subprocess.run",
+            side_effect=FileNotFoundError("[WinError 2] 系统找不到指定的文件。"),
+        ):
+            self.assertFalse(should_normalize_video_for_jianying(self._fake_video))
+
+    def test_26_add_media_safe_survives_ffprobe_missing(self):
+        """ffprobe 缺失时 add_media_safe 不得崩溃，正常返回片段"""
+        from jy_wrapper import JyProject
+
+        p = JyProject(
+            "TestFfprobeMissing", drafts_root=os.path.dirname(self._fake_video), overwrite=True
+        )
+        with patch(
+            "utils.media_normalizer.subprocess.run",
+            side_effect=FileNotFoundError("[WinError 2] 系统找不到指定的文件。"),
+        ):
+            seg = p.add_media_safe(self._fake_video, "0s", "3s", track_name="V1")
+
+        self.assertIsNotNone(seg)
+
+
 if __name__ == "__main__":
     unittest.main()

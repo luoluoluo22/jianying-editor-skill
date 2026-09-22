@@ -35,7 +35,12 @@ def _probe_video(input_path: str) -> dict:
         "json",
         input_path,
     ]
-    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    except (FileNotFoundError, OSError):
+        # ffprobe 未安装或不可执行（如精简 CI 镜像）时降级为“未知”，
+        # 让调用方走原始导入路径，而不是中断整个流程。
+        return {}
     if proc.returncode != 0:
         return {}
     try:
